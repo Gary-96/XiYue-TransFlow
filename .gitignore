@@ -1,0 +1,49 @@
+# ========================================
+# 乐曼同传 - 源代码与打包产物完全隔离
+# ========================================
+
+# 1. 隔离所有打包产物与构建临时文件
+/output/
+*.exe
+*.dist
+*.build
+
+# 2. Python 依赖与编译缓存
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+*.egg-info/
+
+# 3. Node.js / Electron 依赖与依赖包
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+
+# 4. 本地用户配置与敏感文件
+config.json
+.env
+.env.local
+*.log
+cleanup_report_*
+
+# 5. IDE / 编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 6. OS
+.DS_Store
+Thumbs.db
+
+# 7. 前端构建产物（已在 output/ 隔离，额外防护）
+frontend/dist/
+frontend/dist-electron/
+frontend/release/
+
+# 8. 后端构建产物（已在 output/ 隔离，额外防护）
+backend/dist/
+backend/build/
+backend/*.spec

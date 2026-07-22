@@ -1,0 +1,138 @@
+/* ========================================
+   乐曼同传 Leman Translate — 深空电竞极光风
+   ======================================== */
+
+:root {
+  /* 色彩系统 */
+  --bg-deep: #060818;
+  --bg-surface: rgba(15, 20, 40, 0.72);
+  --bg-glass: rgba(20, 28, 55, 0.45);
+  --bg-glass-hover: rgba(28, 38, 70, 0.6);
+
+  --border-glass: rgba(120, 180, 255, 0.12);
+  --border-glow: rgba(0, 229, 255, 0.25);
+
+  --text-primary: #eaf2ff;
+  --text-secondary: rgba(200, 215, 245, 0.7);
+  --text-muted: rgba(160, 180, 220, 0.4);
+
+  --accent-cyan: #00e5ff;
+  --accent-purple: #a855f7;
+  --accent-blue: #3b82f6;
+  --accent-pink: #ec4899;
+  --accent-green: #10d9a3;
+  --accent-orange: #ff9d4d;
+  --accent-red: #ef4444;
+
+  /* 发光效果 */
+  --glow-cyan: 0 0 20px rgba(0, 229, 255, 0.3), 0 0 40px rgba(0, 229, 255, 0.1);
+  --glow-purple: 0 0 20px rgba(168, 85, 247, 0.3), 0 0 40px rgba(168, 85, 247, 0.1);
+
+  /* 圆角 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* 过渡 */
+  --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body {
+  font-family: 'Noto Sans SC', 'Be Vietnam Pro', system-ui, sans-serif;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(120, 180, 255, 0.15);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 180, 255, 0.3);
+}
+
+/* 毛玻璃基础 */
+.glass {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-lg);
+}
+
+/* 发光文字 */
+.glow-text-cyan {
+  color: var(--accent-cyan);
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+}
+
+.glow-text-purple {
+  color: var(--accent-purple);
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.5);
+}
+
+/* 动画 */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes slide-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

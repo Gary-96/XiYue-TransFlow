@@ -1,0 +1,40 @@
+{
+  "appId": "com.leman.translate",
+  "productName": "乐曼同传",
+  "copyright": "Copyright © 2026 乐曼同传 Leman Translate",
+  "directories": {
+    "output": "../output"
+  },
+  "files": [
+    "dist/**/*",
+    "dist-electron/**/*",
+    "resources/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "../output/backend_engine",
+      "to": "backend_engine"
+    }
+  ],
+  "win": {
+    "icon": "resources/icon.ico",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "shortcutName": "乐曼同传",
+    "include": "build/installer.nsh"
+  },
+  "asar": true,
+  "asarUnpack": [
+    "dist-electron/**/*"
+  ]
+}
