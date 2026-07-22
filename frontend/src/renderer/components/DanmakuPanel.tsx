@@ -19,6 +19,11 @@ const TYPE_STYLES: Record<string, { color: string; icon: string; label: string }
   collector_stopped: { color: '#ef4444', icon: '🛑', label: '系统' },
 }
 
+/** 扩展 StreamMessage 类型以包含翻译字段 */
+interface DanmakuMessage extends StreamMessage {
+  translated_text?: string
+}
+
 export default function DanmakuPanel({ messages, onClear }: DanmakuPanelProps) {
   const listRef = useRef<HTMLDivElement>(null)
 
@@ -46,6 +51,8 @@ export default function DanmakuPanel({ messages, onClear }: DanmakuPanelProps) {
         ) : (
           messages.map((msg, i) => {
             const style = TYPE_STYLES[msg.type] || TYPE_STYLES.comment
+            const dmsg = msg as DanmakuMessage
+            const hasTranslation = dmsg.translated_text && dmsg.translated_text.trim()
             return (
               <div
                 key={i}
@@ -69,6 +76,9 @@ export default function DanmakuPanel({ messages, onClear }: DanmakuPanelProps) {
                   )}
                 </div>
                 <div className="msg-text">{msg.text}</div>
+                {hasTranslation && (
+                  <div className="msg-translated">↳ {dmsg.translated_text}</div>
+                )}
                 {msg.gift_name && (
                   <div className="msg-gift">
                     🎁 {msg.gift_name} ×{msg.gift_count}
@@ -188,6 +198,15 @@ export default function DanmakuPanel({ messages, onClear }: DanmakuPanelProps) {
           font-size: 13px;
           color: var(--text-primary);
           line-height: 1.5;
+        }
+        .msg-translated {
+          font-size: 12px;
+          color: var(--text-secondary);
+          line-height: 1.4;
+          margin-top: 2px;
+          padding-left: 12px;
+          border-left: 1px solid rgba(255, 255, 255, 0.1);
+          opacity: 0.85;
         }
         .msg-gift {
           font-size: 12px;

@@ -15,6 +15,7 @@ interface SafeConfig {
   models: Record<string, string>
   mode: string
   audio_device_id?: number | null
+  voice_id?: string
 }
 
 // ── 音频设备类型 ────────────────────────────────────────
@@ -34,6 +35,26 @@ interface ValidationResult {
   valid: boolean
   message: string
   latency_ms: number
+}
+
+// ── 语言选项 ──────────────────────────────────────────
+const LANGUAGES: Record<string, { label: string; icon: string }> = {
+  auto:   { label: '自动检测', icon: '🔍' },
+  zh:     { label: '中文',     icon: '🇨🇳' },
+  vi:     { label: '越南语',   icon: '🇻🇳' },
+  en:     { label: '英语',     icon: '🇺🇸' },
+  ja:     { label: '日语',     icon: '🇯🇵' },
+  ko:     { label: '韩语',     icon: '🇰🇷' },
+  th:     { label: '泰语',     icon: '🇹🇭' },
+}
+
+interface VoiceOption {
+  id: string
+  name: string
+  lang: string
+  gender: string
+  is_custom?: boolean
+  edge_voice?: string
 }
 
 export default function SettingsPanel() {
@@ -62,6 +83,16 @@ export default function SettingsPanel() {
   const [loadingDevices, setLoadingDevices] = useState(false)
   const [switchingDevice, setSwitchingDevice] = useState(false)
 
+  // ── 音色管理状态 ──────────────────────────────────────
+  const [voiceOptions, setVoiceOptions] = useState<VoiceOption[]>([])
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>('zh-CN-female-1')
+  const [loadingVoices, setLoadingVoices] = useState(false)
+
+  // ── 多语言控制状态 ────────────────────────────────────
+  const [srcLang, setSrcLang] = useState<string>('zh')
+  const [tgtLang, setTgtLang] = useState<string>('vi')
+  const [languageAvailable, setLanguageAvailable] = useState<Record<string, { label: string; icon: string }>>(LANGUAGES)
+
   // ── 加载配置 ──────────────────────────────────────────
   const loadConfig = useCallback(async () => {
     setLoading(true)
@@ -78,7 +109,7 @@ export default function SettingsPanel() {
         setEditKeys({ ...data.config.keys })
         setEditEndpoints({ ...data.config.custom_endpoints })
         setEditModels({ ...data.config.models })
-        
+
         // 同步音频设备 ID
         setSelectedDeviceId(data.config.audio_device_id ?? null)
       }
@@ -115,6 +146,60 @@ export default function SettingsPanel() {
     loadAudioDevices()
   }, [loadAudioDevices])
 
+  // ── 加载音色列表 ──────────────────────────────────────
+  const loadVoices = useCallback(async () => {
+    setLoadingVoices(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/voice/list`)
+      const data = await res.json()
+      if (data.status === 'success') {
+        // 转数组排序：默认音色在前
+        const opts: VoiceOption[] = (Object.values(data.voices) as VoiceOption[]).sort((a, b) => {
+          if (a.id === data.current_voice_id) return -1
+          if (b.id === data.current_voice_id) return 1
+          if ((a.is_custom && !b.is_custom)) return 1
+          if ((!a.is_custom && b.is_custom)) return -1
+          return 0
+        })
+        setVoiceOptions(opts)
+        setSelectedVoiceId(data.current_voice_id || 'zh-CN-female-1')
+      }
+    } catch {
+      // 静默忽略
+    } finally {
+      setLoadingVoices(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadVoices()
+  }, [loadVoices])
+
+  // ── 加载语言对 ────────────────────────────────────────
+  const loadLanguage = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/language/get`)
+      const data = await res.json()
+      if (data.status === 'success') {
+        setSrcLang(data.src_lang || 'zh')
+        setTgtLang(data.tgt_lang || 'vi')
+        if (data.available_languages) {
+          const langs: Record<string, { label: string; icon: string }> = {}
+          for (const [k, v] of Object.entries(data.available_languages) as [string, {label:string; icon:string}][]) {
+            langs[k] = { label: v.label, icon: v.icon }
+          }
+          setLanguageAvailable(langs)
+        }
+      }
+    } catch {
+      // 静默
+    }
+  }, [])
+
+  useEffect(() => {
+    loadLanguage()
+  }, [loadLanguage])
+
   // ── 切换音频输入设备 ──────────────────────────────────
   const handleSwitchAudioDevice = async (deviceId: number | null) => {
     setSwitchingDevice(true)
@@ -127,13 +212,12 @@ export default function SettingsPanel() {
       })
       const data = await res.json()
       if (data.status === 'success') {
-        const devName = deviceId === null 
-          ? '系统默认设备' 
+        const devName = deviceId === null
+          ? '系统默认设备'
           : audioDevices.find(d => d.id === deviceId)?.name || `设备 ${deviceId}`
         setToast({ type: 'success', msg: `🎤 已切换到: ${devName}` })
       } else {
         setToast({ type: 'error', msg: data.message || '切换失败' })
-        // 恢复之前的选择
         setSelectedDeviceId(config?.audio_device_id ?? null)
       }
     } catch (e) {
@@ -141,6 +225,71 @@ export default function SettingsPanel() {
       setSelectedDeviceId(config?.audio_device_id ?? null)
     } finally {
       setSwitchingDevice(false)
+    }
+  }
+
+  // ── 音色切换 ─────────────────────────────────────────
+  const handleVoiceChange = async (voiceId: string) => {
+    setSelectedVoiceId(voiceId)
+    try {
+      const res = await fetch(`${API_BASE}/api/voice/set`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice_id: voiceId }),
+      })
+      const data = await res.json()
+      if (data.status === 'success') {
+        setToast({ type: 'success', msg: `🔊 音色已切换: ${voiceId}` })
+      } else {
+        setToast({ type: 'error', msg: data.message || '切换失败' })
+      }
+    } catch (e) {
+      setToast({ type: 'error', msg: `网络错误: ${(e as Error).message}` })
+    }
+  }
+
+  // ── 语言切换 ─────────────────────────────────────────
+  const handleSetLanguage = async (langType: 'src' | 'tgt', langCode: string) => {
+    if (langType === 'src') {
+      setSrcLang(langCode)
+    } else {
+      setTgtLang(langCode)
+    }
+    // 延迟一下让用户看到选择变化再发请求
+    setTimeout(async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/language/set`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ src_lang: srcLang, tgt_lang: tgtLang }),
+        })
+        const data = await res.json()
+        if (data.status === 'success') {
+          setToast({ type: 'success', msg: `🌐 语言已切换: ${LANGUAGES[srcLang]?.icon || ''}${LANGUAGES[srcLang]?.label || srcLang} → ${LANGUAGES[tgtLang]?.icon || ''}${LANGUAGES[tgtLang]?.label || tgtLang}` })
+        } else {
+          setToast({ type: 'error', msg: data.message || '切换失败' })
+        }
+      } catch (e) {
+        setToast({ type: 'error', msg: `网络错误` })
+      }
+    }, 150)
+  }
+
+  const handleSwitchLanguage = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/language/switch`, {
+        method: 'POST',
+      })
+      const data = await res.json()
+      if (data.status === 'success') {
+        setSrcLang(data.src_lang)
+        setTgtLang(data.tgt_lang)
+        setToast({ type: 'success', msg: `🔄 语言已对调: ${LANGUAGES[data.src_lang]?.icon || ''}${LANGUAGES[data.src_lang]?.label || data.src_lang} ↔ ${LANGUAGES[data.tgt_lang]?.icon || ''}${LANGUAGES[data.tgt_lang]?.label || data.tgt_lang}` })
+      } else {
+        setToast({ type: 'error', msg: data.message || '对调失败' })
+      }
+    } catch {
+      setToast({ type: 'error', msg: '网络错误' })
     }
   }
 
@@ -285,6 +434,113 @@ export default function SettingsPanel() {
         <h3>API & 模型设置</h3>
       </div>
 
+      {/* ── 🌐 多语言自由切换 ─────────────────────────────── */}
+      <section className="settings-section">
+        <label className="setting-label">🌐 语言对控制</label>
+        <div className="lang-pair-control">
+          <select
+            className="lang-select"
+            value={srcLang}
+            onChange={(e) => handleSetLanguage('src', e.target.value)}
+            disabled={saving}
+          >
+            {Object.entries(languageAvailable).map(([code, lang]) => (
+              <option key={code} value={code}>
+                {lang.icon} {lang.label}
+              </option>
+            ))}
+          </select>
+
+          <button
+            className="lang-switch-btn"
+            onClick={handleSwitchLanguage}
+            title="一键对调源/目标语言"
+            disabled={saving || loadingVoices}
+          >
+            🔄
+          </button>
+
+          <select
+            className="lang-select"
+            value={tgtLang}
+            onChange={(e) => handleSetLanguage('tgt', e.target.value)}
+            disabled={saving}
+          >
+            {Object.entries(languageAvailable).filter(([k]) => k !== 'auto').map(([code, lang]) => (
+              <option key={code} value={code}>
+                {lang.icon} {lang.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="lang-desc">
+          当前: {LANGUAGES[srcLang]?.icon || '🔍'} {LANGUAGES[srcLang]?.label || srcLang}
+          {' → '}
+          {LANGUAGES[tgtLang]?.icon || '🌐'} {LANGUAGES[tgtLang]?.label || tgtLang}
+        </div>
+      </section>
+
+      <div className="settings-divider" />
+
+      {/* ── 🔊 同传播报音色 ────────────────────────────────── */}
+      <section className="settings-section">
+        <label className="setting-label">🔊 同传播报音色</label>
+        <div className="voice-selector-container">
+          {loadingVoices ? (
+            <div className="voice-loading">
+              <span className="loading-spinner-sm" />
+              <span>加载中...</span>
+            </div>
+          ) : (
+            <select
+              className="voice-select"
+              value={selectedVoiceId}
+              onChange={(e) => handleVoiceChange(e.target.value)}
+              disabled={saving}
+            >
+              {/* 预设音色分组 */}
+              <optgroup label="📦 预设音色">
+                {voiceOptions.filter(v => !v.is_custom && !v.edge_voice?.startsWith('zh-CN-Xiaoyi') && !v.edge_voice?.includes('-')).slice(0, 6).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} ({v.lang}-{v.gender})
+                  </option>
+                ))}
+              </optgroup>
+              {/* Edge Neural 音色 */}
+              <optgroup label="✨ Edge Neural">
+                {voiceOptions.filter(v => v.edge_voice && v.edge_voice.startsWith('zh-CN-Xiaoyi')).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name} ({v.lang})
+                  </option>
+                ))}
+                {voiceOptions.filter(v =>
+                  v.edge_voice && !v.edge_voice.startsWith('zh-CN') && !v.edge_voice.startsWith('vi-VN')
+                ).slice(0, 10).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                  </option>
+                ))}
+              </optgroup>
+              {/* 自定义音色 */}
+              {voiceOptions.some(v => v.is_custom) && (
+                <optgroup label="🎤 我的自定义声音">
+                  {voiceOptions.filter(v => v.is_custom).map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          )}
+        </div>
+        <div className="voice-desc">
+          当前: {voiceOptions.find(v => v.id === selectedVoiceId)?.name || selectedVoiceId}
+        </div>
+      </section>
+
+      <div className="settings-divider" />
+
       {/* ── 🎙️ 音频输入设置 ─────────────────────────── */}
       <section className="settings-section">
         <label className="setting-label">🎙️ 音频输入设备</label>
@@ -326,6 +582,7 @@ export default function SettingsPanel() {
       </section>
 
       <div className="settings-divider" />
+
       <section className="settings-section">
         <label className="setting-label">当前生效服务商</label>
         <div className="provider-selector">
@@ -491,6 +748,122 @@ export default function SettingsPanel() {
           color: var(--text-muted);
           text-transform: uppercase;
           letter-spacing: 1.5px;
+        }
+
+        /* ── 🌐 多语言控制样式 ─────────────────────────── */
+        .lang-pair-control {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .lang-select {
+          flex: 1;
+          padding: 9px 12px;
+          border: 1px solid var(--border-glass);
+          border-radius: var(--radius-sm);
+          background: rgba(0, 0, 0, 0.35);
+          color: var(--text-primary);
+          font-size: 13px;
+          outline: none;
+          cursor: pointer;
+          transition: var(--transition);
+        }
+        .lang-select:focus {
+          border-color: var(--accent-cyan);
+          box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.1);
+        }
+        .lang-select option {
+          background: var(--bg-deep);
+          color: var(--text-primary);
+        }
+        .lang-switch-btn {
+          width: 36px;
+          height: 36px;
+          border: 1px solid var(--border-glass);
+          border-radius: var(--radius-sm);
+          background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(168, 85, 247, 0.1));
+          color: var(--accent-cyan);
+          cursor: pointer;
+          font-size: 16px;
+          transition: var(--transition);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .lang-switch-btn:hover:not(:disabled) {
+          border-color: var(--accent-cyan);
+          box-shadow: var(--glow-cyan);
+          transform: rotate(180deg);
+        }
+        .lang-switch-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .lang-desc {
+          font-size: 11px;
+          color: var(--text-muted);
+          padding: 4px 8px;
+          background: rgba(0, 229, 255, 0.04);
+          border-radius: 4px;
+          border: 1px solid rgba(0, 229, 255, 0.08);
+        }
+
+        /* ── 🔊 音色选择器样式 ─────────────────────────── */
+        .voice-selector-container {
+          position: relative;
+        }
+        .voice-select {
+          width: 100%;
+          padding: 9px 12px;
+          border: 1px solid var(--border-glass);
+          border-radius: var(--radius-sm);
+          background: rgba(0, 0, 0, 0.35);
+          color: var(--text-primary);
+          font-size: 13px;
+          outline: none;
+          cursor: pointer;
+          transition: var(--transition);
+        }
+        .voice-select:focus {
+          border-color: var(--accent-purple);
+          box-shadow: 0 0 0 2px rgba(168, 85, 247, 0.1);
+        }
+        .voice-select optgroup {
+          background: var(--bg-deep);
+          color: var(--text-primary);
+          font-weight: 600;
+          padding: 4px 0;
+        }
+        .voice-select option {
+          background: var(--bg-deep);
+          color: var(--text-primary);
+          padding: 8px;
+        }
+        .voice-desc {
+          font-size: 11px;
+          color: var(--text-muted);
+          padding: 4px 8px;
+          background: rgba(168, 85, 247, 0.04);
+          border-radius: 4px;
+          border: 1px solid rgba(168, 85, 247, 0.08);
+        }
+        .voice-loading {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 10px;
+          color: var(--text-muted);
+          font-size: 12px;
+        }
+        .loading-spinner-sm {
+          width: 14px;
+          height: 14px;
+          border: 2px solid rgba(168, 85, 247, 0.15);
+          border-top-color: var(--accent-purple);
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
         }
 
         /* 服务商选择卡片 */

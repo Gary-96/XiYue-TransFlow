@@ -50,12 +50,13 @@ class WhisperService:
             logger.error(f"Failed to load Whisper model: {str(e)}")
             raise
     
-    async def transcribe_audio(self, audio_data: np.ndarray) -> Optional[TranscriptionResult]:
+    async def transcribe_audio(self, audio_data: np.ndarray, language: str = None) -> Optional[TranscriptionResult]:
         """
         Transcribe audio data using faster-whisper
         
         Args:
             audio_data: numpy array of audio samples (float32, 16kHz)
+            language: 语言代码 ("zh"/"vi"/"en"/"ja"/"ko"/"th"/None=自动检测)
             
         Returns:
             TranscriptionResult or None if transcription fails
@@ -70,21 +71,23 @@ class WhisperService:
                 audio_data = audio_data.astype(np.float32)
             
             # Resample if necessary (Whisper expects 16kHz)
-            # This is a basic resampling - you might want to use librosa for better quality
             if len(audio_data.shape) > 1:
                 audio_data = audio_data.flatten()
+            
+            # 构建 transcribe 参数：空字符串或 None = 自动检测
+            transcribe_kwargs = dict(
+                beam_size=5,
+                vad_filter=True,
+                vad_parameters=dict(min_silence_duration_ms=500),
+            )
+            if language:
+                transcribe_kwargs["language"] = language
             
             # Run transcription in a thread pool to avoid blocking
             loop = asyncio.get_event_loop()
             
             def transcribe():
-                segments, info = self.model.transcribe(
-                    audio_data,
-                    language="zh",  # Chinese source language
-                    beam_size=5,
-                    vad_filter=True,
-                    vad_parameters=dict(min_silence_duration_ms=500)
-                )
+                segments, info = self.model.transcribe(audio_data, **transcribe_kwargs)
                 
                 # Get the first segment (most confident)
                 for segment in segments:

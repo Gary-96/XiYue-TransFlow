@@ -64,7 +64,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "openai": "gpt-4o-mini"
     },
     "mode": "auto",  # auto | manual
-    "audio_device_id": None  # None = system default; int = device index
+    "audio_device_id": None,  # None = system default; int = device index
+    "voice_id": "zh-CN-female-1",  # TTS 音色 ID
+    "language_pair": {"src_lang": "zh", "tgt_lang": "vi"},  # 源语言 → 目标语言
 }
 
 # ── 服务商元数据 ──────────────────────────────────────────
@@ -219,6 +221,14 @@ class ConfigManager:
         """获取音频输入设备 ID（None = 系统默认）"""
         return self._config.get("audio_device_id")
 
+    def get_voice_id(self) -> str:
+        """获取当前 TTS 音色 ID"""
+        return self._config.get("voice_id", "zh-CN-female-1")
+
+    def get_language_pair(self) -> Dict[str, str]:
+        """获取当前语言对"""
+        return self._config.get("language_pair", {"src_lang": "zh", "tgt_lang": "vi"})
+
     # ── 写入 ─────────────────────────────────────────────
 
     def set_provider(self, provider: str) -> bool:
@@ -282,6 +292,15 @@ class ConfigManager:
             dev_id = updates["audio_device_id"]
             if dev_id is None or (isinstance(dev_id, int) and dev_id >= 0):
                 self._config["audio_device_id"] = dev_id
+
+        if "voice_id" in updates and isinstance(updates["voice_id"], str):
+            self._config["voice_id"] = updates["voice_id"]
+
+        if "language_pair" in updates and isinstance(updates["language_pair"], dict):
+            src = updates["language_pair"].get("src_lang", "")
+            tgt = updates["language_pair"].get("tgt_lang", "")
+            if src and tgt:
+                self._config["language_pair"] = {"src_lang": src, "tgt_lang": tgt}
 
         self._sync_env()
         return self._save()

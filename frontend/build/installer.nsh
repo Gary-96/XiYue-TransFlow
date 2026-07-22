@@ -1,6 +1,7 @@
 !macro customInstall
   ; ============================================
   ; 检测是否安装了虚拟声卡 (VB-Cable)
+  ; 如未安装则提示用户手动下载，不自动安装
   ; ============================================
 
   DetailPrint "正在检测虚拟声卡..."
@@ -14,36 +15,15 @@ check32bit:
   ; 检查 32 位注册表
   SetRegView 32
   ReadRegStr $0 HKLM "SOFTWARE\VB-Audio\Cable" "DeviceName"
-  StrCmp $0 "" install_driver driver_installed
+  StrCmp $0 "" driver_not_installed driver_installed
 
 driver_installed:
   DetailPrint "虚拟声卡已安装: $0"
   Goto done
 
-install_driver:
-  DetailPrint "未检测到虚拟声卡，准备安装..."
-
-  ; 检查是否存在驱动安装包
-  IfFileExists "$INSTDIR\resources\driver\VBCABLE_Setup_x64.exe" 0 missing_driver
-
-  ; 静默安装 VB-Cable 驱动
-  DetailPrint "正在安装 VB-Cable 驱动..."
-  ExecWait '"$INSTDIR\resources\driver\VBCABLE_Setup_x64.exe" /i /s' $1
-
-  IntCmp $1 0 install_success install_failed
-
-install_success:
-  DetailPrint "VB-Cable 驱动安装成功"
-  Goto done
-
-install_failed:
-  DetailPrint "VB-Cable 驱动安装失败 (错误码: $1)"
-  MessageBox MB_OK "虚拟声卡驱动安装失败，请手动安装。$\n下载地址: https://vb-audio.com/Cable/" /SD IDOK
-  Goto done
-
-missing_driver:
-  DetailPrint "未找到驱动安装包"
-  MessageBox MB_OK "未找到虚拟声卡驱动安装包，请手动下载安装。$\n下载地址: https://vb-audio.com/Cable/" /SD IDOK
+driver_not_installed:
+  DetailPrint "未检测到虚拟声卡"
+  MessageBox MB_OK "未检测到 VB-Cable 虚拟声卡。$\n$\n如需使用虚拟声卡功能，请手动下载安装：$\nhttps://vb-audio.com/Cable/$\n$\n安装完成后重启电脑即可生效。" /SD IDOK
 
 done:
   DetailPrint "虚拟声卡检测完成"

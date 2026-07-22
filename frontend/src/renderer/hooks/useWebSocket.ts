@@ -13,6 +13,7 @@ export interface StreamMessage {
   text: string
   platform: string
   language?: string
+  translated_text?: string
   gift_name?: string
   gift_count?: number
   social_type?: string
@@ -39,6 +40,18 @@ export interface AudioTranscription {
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected'
 
+// ── 全局回调 ───────────────────────────────────────────────
+let onLanguageChangedCallback: ((srcLang: string, tgtLang: string) => void) | null = null
+let onVoiceChangedCallback: ((voiceId: string) => void) | null = null
+
+export function setLanguageChangedListener(cb: (srcLang: string, tgtLang: string) => void) {
+  onLanguageChangedCallback = cb
+}
+
+export function setVoiceChangedListener(cb: (voiceId: string) => void) {
+  onVoiceChangedCallback = cb
+}
+
 export function useStreamWebSocket() {
   const [messages, setMessages] = useState<StreamMessage[]>([])
   const [status, setStatus] = useState<ConnectionStatus>('disconnected')
@@ -58,7 +71,22 @@ export function useStreamWebSocket() {
 
     ws.onmessage = (event) => {
       try {
-        const msg: StreamMessage = JSON.parse(event.data)
+        const parsed = JSON.parse(event.data)
+
+        // 监听后端广播的音色/语言变更通知
+        if (parsed.type === 'language_changed' || parsed.type === 'language_switched') {
+          if (onLanguageChangedCallback) {
+            onLanguageChangedCallback(parsed.src_lang, parsed.tgt_lang)
+          }
+        }
+        if (parsed.type === 'voice_changed') {
+          if (onVoiceChangedCallback) {
+            onVoiceChangedCallback(parsed.voice_id)
+          }
+        }
+
+        // 其他消息按 StreamMessage 处理
+        const msg: StreamMessage = parsed
         setMessages((prev) => [...prev.slice(-200), msg])
       } catch (e) {
         console.error('[Stream WS] 解析失败:', e)

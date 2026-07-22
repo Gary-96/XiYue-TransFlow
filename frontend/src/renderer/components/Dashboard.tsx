@@ -1,10 +1,26 @@
-import { useState, useEffect, useRef } from 'react'
-import { useStreamWebSocket, useAudioWebSocket } from '../hooks/useWebSocket'
+import { useState, useEffect } from 'react'
+import { useStreamWebSocket, useAudioWebSocket, setLanguageChangedListener, setVoiceChangedListener } from '../hooks/useWebSocket'
 import { usePlatform } from '../hooks/usePlatform'
 import DanmakuPanel from './DanmakuPanel'
 import SettingsPanel from './SettingsPanel'
+import AudioSpectrum from './AudioSpectrum'
 
 type Platform = 'tiktok' | 'douyin'
+
+interface LanguageOption {
+  code: string
+  label: string
+  icon: string
+}
+
+const SUPPORTED_LANGS: LanguageOption[] = [
+  { code: 'zh', label: '中文', icon: '🇨🇳' },
+  { code: 'vi', label: '越南语', icon: '🇻🇳' },
+  { code: 'en', label: '英语', icon: '🇺🇸' },
+  { code: 'ja', label: '日语', icon: '🇯🇵' },
+  { code: 'ko', label: '韩语', icon: '🇰🇷' },
+  { code: 'th', label: '泰语', icon: '🇹🇭' },
+]
 
 const electron = (window as any).electronAPI
 
@@ -27,10 +43,53 @@ export default function Dashboard() {
   const [isPinned, setIsPinned] = useState(false)
   const [activeTab, setActiveTab] = useState<'danmaku' | 'subtitle' | 'settings'>('danmaku')
   const [health, setHealth] = useState<Record<string, unknown> | null>(null)
-  const freqBarsRef = useRef<HTMLCanvasElement>(null)
-  const audioContextRef = useRef<AudioContext | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
-  const animationRef = useRef<number>()
+
+  // 语言对状态
+  const [srcLang, setSrcLang] = useState('zh')
+  const [tgtLang, setTgtLang] = useState('vi')
+  const [langSwitching, setLangSwitching] = useState(false)
+
+  // 后端启动状态
+  const [backendReady, setBackendReady] = useState(false)
+  const [backendFailed, setBackendFailed] = useState(false)
+  const [backendError, setBackendError] = useState<string>('')
+
+  // 监听后端就绪/失败事件
+  useEffect(() => {
+    const onReady = () => setBackendReady(true)
+    const onFailed = (info?: { error?: string; logPath?: string }) => {
+      setBackendFailed(true)
+      setBackendError(info?.error || '后端启动失败')
+    }
+
+    electron.on('backend:ready', onReady)
+    electron.on('backend:failed', onFailed)
+    electron.on('backend:crashed', onFailed)
+  }, [])
+
+  // 注册语言变更监听（来自后端广播）
+  useEffect(() => {
+    setLanguageChangedListener((src, tgt) => {
+      setSrcLang(src)
+      setTgtLang(tgt)
+    })
+    setVoiceChangedListener(() => {
+      // 音色变更不需要在 Dashboard 处理，SettingsPanel 自行管理
+    })
+  }, [])
+
+  // 初始化时加载语言对配置
+  useEffect(() => {
+    fetch(`${API_BASE}/api/language/get`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'success') {
+          setSrcLang(data.src_lang)
+          setTgtLang(data.tgt_lang)
+        }
+      })
+      .catch(() => {/* 静默 */})
+  }, [])
 
   // 定期检查后端健康
   useEffect(() => {
@@ -54,70 +113,39 @@ export default function Dashboard() {
       .catch(() => {/* 静默 */})
   }, [])
 
-  // 频谱可视化
-  useEffect(() => {
-    if (isRecording && !audioContextRef.current) {
-      navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-        const ctx = new AudioContext()
-        const source = ctx.createMediaStreamSource(stream)
-        const analyser = ctx.createAnalyser()
-        analyser.fftSize = 128
-        source.connect(analyser)
-        audioContextRef.current = ctx
-        analyserRef.current = analyser
-        drawFreqBars()
+  // 语言切换处理
+  const handleSetLanguage = async (src: string, tgt: string) => {
+    if (src === tgt) return
+    setLangSwitching(true)
+    try {
+      await fetch(`${API_BASE}/api/language/set`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ src_lang: src, tgt_lang: tgt }),
       })
+      setSrcLang(src)
+      setTgtLang(tgt)
+    } catch (e) {
+      console.error('Language switch failed:', e)
+    } finally {
+      setLangSwitching(false)
     }
-    if (!isRecording) {
-      if (animationRef.current) cancelAnimationFrame(animationRef.current)
-      if (audioContextRef.current) {
-        audioContextRef.current.close()
-        audioContextRef.current = null
+  }
+
+  const handleSwapLanguage = async () => {
+    setLangSwitching(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/language/switch`, { method: 'POST' })
+      const data = await res.json()
+      if (data.status === 'success') {
+        setSrcLang(data.src_lang)
+        setTgtLang(data.tgt_lang)
       }
+    } catch (e) {
+      console.error('Language swap failed:', e)
+    } finally {
+      setLangSwitching(false)
     }
-  }, [isRecording])
-
-  const drawFreqBars = () => {
-    const canvas = freqBarsRef.current
-    const analyser = analyserRef.current
-    if (!canvas || !analyser) return
-
-    const ctx = canvas.getContext('2d')!
-    const bufferLength = analyser.frequencyBinCount
-    const dataArray = new Uint8Array(bufferLength)
-
-    const draw = () => {
-      animationRef.current = requestAnimationFrame(draw)
-      analyser.getByteFrequencyData(dataArray)
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-
-      const barCount = 48
-      const barWidth = canvas.width / barCount - 2
-
-      for (let i = 0; i < barCount; i++) {
-        const idx = Math.floor((i / barCount) * bufferLength)
-        const value = dataArray[idx] / 255
-        const barHeight = value * canvas.height * 0.9
-
-        const x = i * (barWidth + 2)
-        const y = canvas.height - barHeight
-
-        // 青紫双色渐变
-        const gradient = ctx.createLinearGradient(0, y, 0, canvas.height)
-        gradient.addColorStop(0, `rgba(0, 229, 255, ${0.8 + value * 0.2})`)
-        gradient.addColorStop(0.5, `rgba(99, 102, 241, ${0.6 + value * 0.2})`)
-        gradient.addColorStop(1, `rgba(168, 85, 247, ${0.4 + value * 0.2})`)
-
-        ctx.fillStyle = gradient
-        ctx.fillRect(x, y, barWidth, barHeight)
-
-        // 顶部高光
-        ctx.fillStyle = `rgba(255, 255, 255, ${value * 0.5})`
-        ctx.fillRect(x, y, barWidth, 2)
-      }
-    }
-    draw()
   }
 
   const handleSwitchPlatform = async () => {
@@ -131,6 +159,57 @@ export default function Dashboard() {
   }
 
   const platformActive = status?.active_platform != null
+
+  if (!backendReady && !backendFailed) {
+    return (
+      <div className="dashboard-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚡</div>
+          <div style={{ fontSize: '16px', color: 'var(--accent-cyan)', marginBottom: '8px' }}>
+            正在启动后端引擎...
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
+            首次启动可能需要 10-30 秒
+          </div>
+        </div>
+        <style>{`body { margin: 0; background: var(--bg-deep); }`}</style>
+      </div>
+    )
+  }
+
+  if (backendFailed) {
+    return (
+      <div className="dashboard-root" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: 'var(--text-secondary)', maxWidth: '420px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+          <div style={{ fontSize: '16px', color: 'var(--accent-red)', marginBottom: '8px' }}>
+            后端引擎启动失败
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '16px', lineHeight: 1.6 }}>
+            {backendError}
+          </div>
+          <button
+            onClick={() => electron.openBackendLog?.()}
+            style={{
+              padding: '8px 20px',
+              borderRadius: '8px',
+              border: '1px solid var(--accent-cyan)',
+              background: 'rgba(16, 185, 129, 0.1)',
+              color: 'var(--accent-cyan)',
+              fontSize: '13px',
+              cursor: 'pointer',
+            }}
+          >
+            查看日志文件
+          </button>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '12px' }}>
+            请重启应用，或检查杀毒软件是否拦截了 backend_engine.exe
+          </div>
+        </div>
+        <style>{`body { margin: 0; background: var(--bg-deep); }`}</style>
+      </div>
+    )
+  }
 
   return (
     <div className="dashboard-root">
@@ -198,6 +277,45 @@ export default function Dashboard() {
             </div>
           </section>
 
+          {/* 语言对切换 */}
+          <section className="panel-section">
+            <div className="section-label">翻译语言对</div>
+            <div className="lang-pair-row">
+              <select
+                className="lang-select"
+                value={srcLang}
+                onChange={(e) => handleSetLanguage(e.target.value, tgtLang)}
+                disabled={langSwitching}
+              >
+                {SUPPORTED_LANGS.map(lang => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.icon} {lang.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                className="swap-btn"
+                onClick={handleSwapLanguage}
+                disabled={langSwitching}
+                title="交换语言"
+              >
+                ⇄
+              </button>
+              <select
+                className="lang-select"
+                value={tgtLang}
+                onChange={(e) => handleSetLanguage(srcLang, e.target.value)}
+                disabled={langSwitching}
+              >
+                {SUPPORTED_LANGS.map(lang => (
+                  <option key={lang.code} value={lang.code}>
+                    {lang.icon} {lang.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </section>
+
           {/* 平台控制 */}
           <section className="panel-section">
             <div className="section-label">直播平台</div>
@@ -251,25 +369,7 @@ export default function Dashboard() {
               <span className="rec-dot" />
               {isRecording ? '停止同传' : '开始同传'}
             </button>
-            <canvas
-              ref={freqBarsRef}
-              className="freq-canvas"
-              width={240}
-              height={60}
-            />
-          </section>
-
-          {/* 窗口控制 */}
-          <section className="panel-section">
-            <div className="section-label">悬浮窗口</div>
-            <div className="window-toggle-row">
-              <button className="toggle-btn" onClick={() => electron.showOverlay()}>
-                💬 灵动岛
-              </button>
-              <button className="toggle-btn" onClick={() => electron.showOBS()}>
-                🟢 OBS绿幕
-              </button>
-            </div>
+            <AudioSpectrum height={40} />
           </section>
         </aside>
 
@@ -631,33 +731,6 @@ export default function Dashboard() {
           box-shadow: 0 0 8px var(--accent-cyan);
         }
 
-        .freq-canvas {
-          width: 100%;
-          height: 60px;
-          margin-top: 4px;
-        }
-
-        .window-toggle-row {
-          display: flex;
-          gap: 8px;
-        }
-        .toggle-btn {
-          flex: 1;
-          padding: 8px;
-          border: 1px solid var(--border-glass);
-          border-radius: var(--radius-sm);
-          background: var(--bg-glass);
-          color: var(--text-secondary);
-          cursor: pointer;
-          font-size: 12px;
-          transition: var(--transition);
-        }
-        .toggle-btn:hover {
-          background: var(--bg-glass-hover);
-          color: var(--text-primary);
-          border-color: var(--border-glow);
-        }
-
         /* 内容区 */
         .content-area {
           flex: 1;
@@ -798,6 +871,63 @@ export default function Dashboard() {
           color: var(--text-secondary);
           font-size: 12px;
           outline: none;
+        }
+
+        /* 语言对选择器 */
+        .lang-pair-row {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .lang-select {
+          flex: 1;
+          padding: 6px 8px;
+          border: 1px solid var(--border-glass);
+          border-radius: var(--radius-sm);
+          background: rgba(0, 0, 0, 0.3);
+          color: var(--text-primary);
+          font-size: 12px;
+          outline: none;
+          cursor: pointer;
+          transition: var(--transition);
+        }
+        .lang-select:hover {
+          border-color: var(--border-glow);
+        }
+        .lang-select:focus {
+          border-color: var(--accent-cyan);
+          box-shadow: 0 0 0 2px rgba(0, 229, 255, 0.1);
+        }
+        .lang-select:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .lang-select option {
+          background: var(--bg-deep);
+          color: var(--text-primary);
+        }
+        .swap-btn {
+          width: 32px;
+          height: 32px;
+          border: 1px solid var(--border-glass);
+          border-radius: var(--radius-sm);
+          background: rgba(0, 229, 255, 0.05);
+          color: var(--accent-cyan);
+          cursor: pointer;
+          font-size: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: var(--transition);
+          flex-shrink: 0;
+        }
+        .swap-btn:hover:not(:disabled) {
+          background: rgba(0, 229, 255, 0.15);
+          box-shadow: var(--glow-cyan);
+        }
+        .swap-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
         }
       `}</style>
     </div>

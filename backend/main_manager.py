@@ -6,6 +6,7 @@ import numpy as np
 import logging
 from app.services.whisper_service import WhisperService
 from app.services.translation_service import TranslationService
+from app.services.language_manager import language_manager, SUPPORTED_LANGUAGES
 from collectors.manager import create_collector_manager
 from config_manager import get_config_manager, get_config_path, PROVIDER_META
 from audio_device_manager import list_input_devices, get_device_info, validate_device
@@ -38,12 +39,40 @@ websocket_clients = set()
 
 async def message_callback(message: dict):
     """
-    Callback for collector messages - forwards to WebSocket clients
-    
-    Args:
-        message: Unified message format {user, text, platform}
+    Callback for collector messages - translates comments then forwards to WebSocket clients
     """
     try:
+        # 对弹幕评论进行翻译
+        if message.get("type") == "comment" and message.get("text"):
+            try:
+                pair = language_manager.get_current_pair()
+                src_lang = pair.src_lang
+                tgt_lang = pair.tgt_lang
+                
+                # 如果源语言 != 目标语言，进行翻译
+                if src_lang != tgt_lang and src_lang != "auto":
+                    # 语言代码映射到完整名称
+                    lang_map = {"zh": "zh", "vi": "vi", "en": "en", "ja": "ja", "ko": "ko", "th": "th"}
+                    src_full = lang_map.get(src_lang, src_lang)
+                    tgt_full = lang_map.get(tgt_lang, tgt_lang)
+                    
+                    translation = await translation_service._translate_by_provider(
+                        config_manager.get_current_provider(),
+                        config_manager.get_api_key(),
+                        message["text"],
+                        src_full,
+                        tgt_full,
+                    )
+                    if translation and translation.text:
+                        message["translated_text"] = translation.text
+                    else:
+                        message["translated_text"] = ""
+                else:
+                    message["translated_text"] = ""
+            except Exception as e:
+                logger.warning(f"Comment translation failed: {e}")
+                message["translated_text"] = ""
+        
         # Broadcast to all WebSocket clients
         if websocket_clients:
             message_str = json.dumps(message, ensure_ascii=False)
@@ -463,49 +492,114 @@ async def websocket_stream(websocket: WebSocket):
 
 @app.websocket("/ws/audio")
 async def websocket_audio_stream(websocket: WebSocket):
-    """Audio streaming WebSocket for real-time speech recognition"""
+    """Audio streaming WebSocket for real-time speech recognition + FFT spectrum"""
     await websocket.accept()
     logger.info("Audio WebSocket connection established")
     
     audio_buffer = bytearray()
     buffer_timer = None
+    # 固定缓冲区大小：3200 字节 = 1600 samples = 100ms @ 16kHz PCM16
+    BUFFER_SIZE_THRESHOLD = 3200
+    # 最大延迟 500ms，防止数据持续快速到达时缓冲区永不处理
+    MAX_BUFFER_DELAY = 0.5
+    # FFT 频谱参数
+    SPECTRUM_BANDS = 20  # 频段数量
+    SPECTRUM_MIN_DB = -60.0  # 最小分贝（归一化为0）
+    SPECTRUM_MAX_DB = 0.0    # 最大分贝（归一化为100）
+    
+    def compute_spectrum(audio_array: np.ndarray) -> list:
+        """计算 FFT 频段数据，返回 0~100 归一化值数组"""
+        if len(audio_array) < 32:
+            return [0.0] * SPECTRUM_BANDS
+        # 应用汉宁窗减少频谱泄漏
+        windowed = audio_array * np.hanning(len(audio_array))
+        # FFT 计算
+        fft_result = np.fft.rfft(windowed)
+        magnitudes = np.abs(fft_result)
+        # 转分贝
+        magnitudes = np.maximum(magnitudes, 1e-10)
+        db = 20.0 * np.log10(magnitudes)
+        # 按对数频率分布分到 SPECTRUM_BANDS 个频段
+        total_bins = len(db)
+        bands = []
+        for i in range(SPECTRUM_BANDS):
+            # 对数频率分布：低频更密集
+            start = int(total_bins * (i / SPECTRUM_BANDS) ** 1.5)
+            end = int(total_bins * ((i + 1) / SPECTRUM_BANDS) ** 1.5)
+            if end <= start:
+                end = start + 1
+            if end > total_bins:
+                end = total_bins
+            band_db = np.mean(db[start:end]) if end > start else SPECTRUM_MIN_DB
+            # 归一化到 0~100
+            normalized = (band_db - SPECTRUM_MIN_DB) / (SPECTRUM_MAX_DB - SPECTRUM_MIN_DB) * 100.0
+            bands.append(max(0.0, min(100.0, normalized)))
+        return [round(b, 1) for b in bands]
     
     async def process_buffer():
         """Process accumulated audio buffer"""
         nonlocal buffer_timer
-        if len(audio_buffer) > 0:
-            try:
-                audio_array = np.frombuffer(audio_buffer, dtype=np.int16).astype(np.float32) / 32768.0
+        buffer_timer = None
+        if len(audio_buffer) == 0:
+            return
+        
+        try:
+            audio_array = np.frombuffer(bytes(audio_buffer), dtype=np.int16).astype(np.float32) / 32768.0
+            
+            # ── FFT 频谱计算并推送 ──
+            spectrum_data = compute_spectrum(audio_array)
+            await websocket.send_text(json.dumps({
+                "type": "audio_spectrum",
+                "data": spectrum_data,
+                "timestamp": asyncio.get_event_loop().time()
+            }, ensure_ascii=False))
+            
+            # 从 LanguageManager 动态获取 ASR 语言参数
+            asr_lang = language_manager.get_asr_language_param()
+            
+            transcription = await whisper_service.transcribe_audio(audio_array, language=asr_lang or None)
+            
+            if transcription and transcription.text.strip():
+                logger.info(f"Transcription ({transcription.language}): {transcription.text}")
                 
-                transcription = await whisper_service.transcribe_audio(audio_array)
+                # 使用当前语言对进行翻译
+                pair = language_manager.get_current_pair()
+                lang_map = {"zh": "zh", "vi": "vi", "en": "en", "ja": "ja", "ko": "ko", "th": "th"}
+                src_full = lang_map.get(pair.src_lang, pair.src_lang)
+                tgt_full = lang_map.get(pair.tgt_lang, pair.tgt_lang)
                 
-                if transcription and transcription.text.strip():
-                    logger.info(f"Transcription: {transcription.text}")
-                    
-                    translation = await translation_service.translate_to_vietnamese(transcription.text)
-                    
-                    response = {
-                        "type": "audio_transcription",
-                        "transcription": {
-                            "text": transcription.text,
-                            "language": transcription.language,
-                            "confidence": transcription.confidence
-                        },
-                        "translation": {
-                            "text": translation.text,
-                            "source_language": translation.source_language,
-                            "target_language": translation.target_language
-                        }
-                    }
-                    
-                    await websocket.send_text(json.dumps(response, ensure_ascii=False))
-            except Exception as e:
-                logger.error(f"Error processing audio: {str(e)}")
-                error_response = {"type": "error", "error": str(e)}
-                await websocket.send_text(json.dumps(error_response, ensure_ascii=False))
+                translation = await translation_service._translate_by_provider(
+                    config_manager.get_current_provider(),
+                    config_manager.get_api_key(),
+                    transcription.text,
+                    src_full,
+                    tgt_full,
+                )
+                
+                response = {
+                    "type": "audio_transcription",
+                    "transcription": {
+                        "text": transcription.text,
+                        "language": transcription.language,
+                        "confidence": transcription.confidence
+                    },
+                    "translation": {
+                        "text": translation.text if translation else "",
+                        "source_language": src_full,
+                        "target_language": tgt_full
+                    } if translation else None
+                }
+                
+                await websocket.send_text(json.dumps(response, ensure_ascii=False))
+        except Exception as e:
+            logger.error(f"Error processing audio: {str(e)}")
+            error_response = {"type": "error", "error": str(e)}
+            await websocket.send_text(json.dumps(error_response, ensure_ascii=False))
         
         audio_buffer.clear()
-        buffer_timer = None
+    
+    import time as _time
+    buffer_first_data_time = None
     
     try:
         while True:
@@ -513,16 +607,186 @@ async def websocket_audio_stream(websocket: WebSocket):
             data = await websocket.receive_bytes()
             audio_buffer.extend(data)
             
-            # Process buffer every 1000 bytes (~62ms of audio)
-            if len(audio_buffer) >= 1000:
+            if buffer_first_data_time is None:
+                buffer_first_data_time = _time.monotonic()
+            
+            # 触发条件 1：缓冲区达到固定大小阈值
+            should_process = len(audio_buffer) >= BUFFER_SIZE_THRESHOLD
+            
+            # 触发条件 2：超过最大延迟时间（即使未达阈值也强制处理）
+            if not should_process and buffer_first_data_time:
+                elapsed = _time.monotonic() - buffer_first_data_time
+                if elapsed >= MAX_BUFFER_DELAY:
+                    should_process = True
+            
+            if should_process:
                 if buffer_timer:
                     buffer_timer.cancel()
-                buffer_timer = asyncio.get_event_loop().call_later(0.1, asyncio.create_task, process_buffer())
+                    buffer_timer = None
+                buffer_first_data_time = None
+                buffer_timer = asyncio.get_event_loop().create_task(process_buffer())
             
     except WebSocketDisconnect:
         logger.info("Audio WebSocket connection closed")
     except Exception as e:
         logger.error(f"Audio WebSocket error: {str(e)}")
+    finally:
+        if buffer_timer:
+            buffer_timer.cancel()
+
+# ── 音色管理路由 ────────────────────────────────────────────────
+from app.services.tts_service import tts_service, DEFAULT_VOICES
+
+
+@app.get("/api/voice/list")
+async def get_voice_list():
+    """获取所有可用音色（默认 + 自定义 + Edge Neural）"""
+    try:
+        all_voices = tts_service.get_all_voices()
+        current_id = config_manager.get_voice_id()
+        return {
+            "status": "success",
+            "voices": all_voices,
+            "current_voice_id": current_id,
+        }
+    except Exception as e:
+        logger.error(f"Error getting voice list: {e}")
+        return {"status": "error", "message": str(e), "voices": {}}
+
+
+@app.put("/api/voice/set")
+async def set_voice(request: dict):
+    """设置当前 TTS 音色"""
+    try:
+        voice_id = request.get("voice_id", "")
+        if not voice_id:
+            return {"status": "error", "message": "voice_id is required"}
+        tts_service.set_voice(voice_id)
+        success = config_manager.update_config({"voice_id": voice_id})
+        # 通知前端
+        await _broadcast_to_all_clients({
+            "type": "voice_changed",
+            "voice_id": voice_id,
+            "timestamp": asyncio.get_event_loop().time()
+        })
+        return {
+            "status": "success",
+            "message": "音色已切换",
+            "voice_id": voice_id,
+        }
+    except Exception as e:
+        logger.error(f"Error setting voice: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# ── 语言管理路由 ────────────────────────────────────────────────
+
+
+@app.get("/api/language/get")
+async def get_language():
+    """获取当前语言对配置"""
+    try:
+        pair = language_manager.get_current_pair()
+        return {
+            "status": "success",
+            "src_lang": pair.src_lang,
+            "tgt_lang": pair.tgt_lang,
+            "src_label": pair.src_label,
+            "tgt_label": pair.tgt_label,
+            "available_languages": SUPPORTED_LANGUAGES,
+        }
+    except Exception as e:
+        logger.error(f"Error getting language: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.put("/api/language/set")
+async def set_language(request: dict):
+    """设置语言对 (src_lang → tgt_lang)"""
+    try:
+        src_lang = request.get("src_lang", "zh")
+        tgt_lang = request.get("tgt_lang", "vi")
+        language_manager.set_language_pair(src_lang, tgt_lang)
+        # 持久化到 config
+        config_manager.update_config({
+            "language_pair": {"src_lang": src_lang, "tgt_lang": tgt_lang}
+        })
+        # 广播给所有客户端
+        await _broadcast_to_all_clients({
+            "type": "language_changed",
+            "src_lang": src_lang,
+            "tgt_lang": tgt_lang,
+            "timestamp": asyncio.get_event_loop().time()
+        })
+        # 同步翻译服务 prompt
+        translation_service._reset_gemini()
+        return {
+            "status": "success",
+            "message": f"语言已切换: {src_lang} → {tgt_lang}",
+            "src_lang": src_lang,
+            "tgt_lang": tgt_lang,
+        }
+    except Exception as e:
+        logger.error(f"Error setting language: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/language/switch")
+async def switch_language():
+    """一键交换源语言和目标语言（zh↔vi）"""
+    try:
+        language_manager.switch_language()
+        pair = language_manager.get_current_pair()
+        config_manager.update_config({
+            "language_pair": {"src_lang": pair.src_lang, "tgt_lang": pair.tgt_lang}
+        })
+        await _broadcast_to_all_clients({
+            "type": "language_switched",
+            "src_lang": pair.src_lang,
+            "tgt_lang": pair.tgt_lang,
+            "timestamp": asyncio.get_event_loop().time()
+        })
+        translation_service._reset_gemini()
+        return {
+            "status": "success",
+            "src_lang": pair.src_lang,
+            "tgt_lang": pair.tgt_lang,
+            "src_label": pair.src_label,
+            "tgt_label": pair.tgt_label,
+        }
+    except Exception as e:
+        logger.error(f"Error switching language: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+# ── 音频采样率路由（供前端确认设备能力） ──────────────────────
+
+@app.get("/api/audio/sample-rates")
+async def get_sample_rates():
+    """获取可用的音频采样率列表"""
+    return {
+        "status": "success",
+        "sample_rates": [8000, 16000, 22050, 44100, 48000],
+        "asr_recommended": 16000,
+    }
+
+
+# ── 内部辅助函数 ──────────────────────────────────────────────
+
+async def _broadcast_to_all_clients(message: dict):
+    """向所有 WebSocket 客户端广播消息"""
+    if not websocket_clients:
+        return
+    msg_str = json.dumps(message, ensure_ascii=False)
+    disconnected = set()
+    for ws in websocket_clients:
+        try:
+            await ws.send_text(msg_str)
+        except Exception:
+            disconnected.add(ws)
+    for c in disconnected:
+        websocket_clients.discard(c)
+
 
 if __name__ == "__main__":
     import uvicorn
