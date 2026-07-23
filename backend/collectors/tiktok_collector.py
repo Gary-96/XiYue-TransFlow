@@ -1,30 +1,31 @@
 """
-TikTok Collector Implementation
-Extends BaseCollector to implement TikTok Live stream collection
+TikTok Collector Implementation (v6 API)
+Extends BaseCollector to implement TikTok Live stream collection using TikTokLive v6.6.6
 """
 import asyncio
 import logging
-import json
 import re
 import time
-from typing import Optional, Dict, Any, List
-from dataclasses import dataclass
+from typing import Optional, Dict, Any, Callable
 from enum import Enum
-import threading
-from queue import Queue, Empty
 
 from .base import BaseCollector, CollectorError
 
-# Try to import TikTokLive
+# Try to import TikTokLive v6
 try:
-    import TikTokLive
-    from TikTokLive.client import TikTokLiveClient
+    from TikTokLive import TikTokLiveClient
+    from TikTokLive.events import (
+        ConnectEvent, DisconnectEvent, CommentEvent, GiftEvent,
+        LikeEvent, JoinEvent, FollowEvent, ShareEvent, RoomUserSeqEvent,
+        LiveEndEvent
+    )
     TIKTOK_AVAILABLE = True
 except ImportError:
     TIKTOK_AVAILABLE = False
-    logging.warning("TikTokLive not installed. Please install: pip install TikTokLive")
+    logging.warning("TikTokLive not installed. Install with: pip install TikTokLive")
 
 logger = logging.getLogger(__name__)
+
 
 class LanguageType(Enum):
     """Supported language types"""
@@ -33,81 +34,79 @@ class LanguageType(Enum):
     ENGLISH = "en"
     UNKNOWN = "unknown"
 
+
 class LanguageDetector:
     """Language detection for TikTok comments"""
-    
+
     def __init__(self):
-        # Chinese character ranges
-        self.chinese_pattern = re.compile(r'[\u4e00-\u9fff\u3400-\u4dbf\U00020000-\U0002a6df\U0002a700-\U0002b73f\U0002b740-\U0002b81f\U0002b820-\U0002ceaf\uf900-\ufaff\u3300-\u33ff\ufe30-\ufe4f\uf900-\ufaff\u2f800-\u2fa1f]')
-        
-        # Vietnamese characters
-        self.vietnamese_pattern = re.compile(r'[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđĐÀÁẠẢÃÂẦẤẬẨẪĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸ]')
-        
-        # English pattern
+        self.chinese_pattern = re.compile(
+            r'[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]'
+        )
+        self.vietnamese_pattern = re.compile(
+            r'[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễ'
+            r'ìíịỉĩòóọỏõôồốộổỗơờớợởỡ'
+            r'ùúụủũưừứựửữỳýỵỷỹđĐÀÁẠẢÃÂẦẤẬẨẪ'
+            r'ĂẰẮẶẲẴÈÉẸẺẼÊỀẾỆỂỄÌÍỊỈĨÒÓỌỎÕ'
+            r'ÔỒỐỘỔỖƠỜỚỢỞỠÙÚỤỦŨƯỪỨỰỬỮỲÝỴỶỸ]'
+        )
         self.english_pattern = re.compile(r'^[a-zA-Z\s\d\W]+$')
-    
+
     def detect_language(self, text: str) -> LanguageType:
-        """Detect language of text"""
         if not text or not text.strip():
             return LanguageType.UNKNOWN
-        
         text = text.strip()
-        
-        # Check for Vietnamese
         if self.vietnamese_pattern.search(text):
-            vi_chars = len(self.vietnamese_pattern.findall(text))
-            if vi_chars > 0:
-                return LanguageType.VIETNAMESE
-        
-        # Check for Chinese
+            return LanguageType.VIETNAMESE
         if self.chinese_pattern.search(text):
             chinese_chars = len(self.chinese_pattern.findall(text))
             total_chars = len(text.replace(' ', ''))
-            
-            if chinese_chars / max(total_chars, 1) > 0.3:  # 30%+ Chinese characters
+            if chinese_chars / max(total_chars, 1) > 0.3:
                 return LanguageType.CHINESE
-        
-        # Check for English
         if self.english_pattern.match(text):
             return LanguageType.ENGLISH
-        
         return LanguageType.UNKNOWN
 
+
 class TikTokCollector(BaseCollector):
-    """TikTok live stream collector implementation"""
-    
-    def __init__(self, message_callback=None):
+    """TikTok live stream collector implementation (TikTokLive v6)"""
+
+    def __init__(self, message_callback: Optional[Callable] = None):
         super().__init__("tiktok", message_callback)
-        
-        self.client = None
-        self.current_host_id = None
+
+        self.client: Optional[TikTokLiveClient] = None
+        self.current_host_id: Optional[str] = None
         self.language_detector = LanguageDetector()
-        self.comment_queue = Queue(maxsize=1000)
-        
+        self._client_task: Optional[asyncio.Task] = None
+
         # TikTok-specific stats
         self.stats.update({
             "total_comments": 0,
             "chinese_comments": 0,
             "vietnamese_comments": 0,
             "english_comments": 0,
-            "gifts_received": 0
+            "gifts_received": 0,
+            "total_likes": 0,
+            "total_follows": 0,
+            "total_shares": 0,
+            "total_joins": 0,
+            "viewer_count": 0,
         })
-        
+
         if not TIKTOK_AVAILABLE:
             raise CollectorError(
                 "TikTokLive library not available. Install with: pip install TikTokLive",
                 "tiktok",
                 "LIBRARY_NOT_AVAILABLE"
             )
-    
+
     async def start(self, identifier: str, **kwargs) -> bool:
         """
         Start collecting from TikTok stream
-        
+
         Args:
             identifier: TikTok host ID (@username)
-            **kwargs: Additional parameters (auto_translate, etc.)
-            
+            **kwargs: Additional parameters
+
         Returns:
             True if successfully started, False otherwise
         """
@@ -115,228 +114,352 @@ class TikTokCollector(BaseCollector):
             if self.is_running:
                 logger.warning("TikTok collector is already running")
                 return False
-            
+
             # Clean host ID
             host_id = identifier.strip()
             if host_id.startswith('@'):
                 host_id = host_id[1:]
-            
+
             self.current_host_id = host_id
             self.stats["connection_time"] = time.time()
-            
-            # Create TikTokLive client
+
+            # Create TikTokLive v6 client
             self.client = TikTokLiveClient(unique_id=host_id)
-            
+
             # Set up event handlers
             self._setup_event_handlers()
-            
-            # Start client in background thread
-            def run_client():
-                try:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(self.client.start())
-                except Exception as e:
-                    logger.error(f"TikTok client error: {str(e)}")
-                    self.is_connected = False
-                    self.is_running = False
-            
-            # Run in background thread
-            client_thread = threading.Thread(target=run_client, daemon=True)
-            client_thread.start()
-            
-            # Wait for connection
-            for _ in range(30):  # 30 seconds timeout
+
+            # Start client (v6: start() returns asyncio.Task)
+            self._client_task = self.client.start(
+                process_connect_events=True,
+                fetch_room_info=True,
+                fetch_gift_info=True,
+                fetch_live_check=True,
+            )
+
+            # Wait for connection (30s timeout)
+            for _ in range(30):
                 if self.is_connected:
                     self.is_running = True
                     logger.info(f"TikTok collector started for @{host_id}")
-                    
-                    # Send startup message
+
                     await self.send_message({
                         "type": "collector_started",
                         "host_id": host_id,
                         "message": f"TikTok collector started for @{host_id}"
                     })
-                    
                     return True
                 await asyncio.sleep(1)
-            
+
             logger.error("TikTok connection timeout")
+            if self._client_task and not self._client_task.done():
+                self._client_task.cancel()
             return False
-            
+
         except Exception as e:
-            logger.error(f"Failed to start TikTok collector: {str(e)}")
-            raise CollectorError(f"Failed to start: {str(e)}", "tiktok", "START_FAILED")
-    
+            logger.error(f"Failed to start TikTok collector: {e}")
+            raise CollectorError(f"Failed to start: {e}", "tiktok", "START_FAILED")
+
     async def stop(self) -> bool:
-        """
-        Stop collecting from TikTok stream
-        
-        Returns:
-            True if successfully stopped, False otherwise
-        """
+        """Stop collecting from TikTok stream"""
         try:
             if not self.is_running:
                 logger.warning("TikTok collector is not running")
                 return False
-            
+
             self.is_running = False
             self.is_connected = False
-            self.current_host_id = None
-            
+
+            # Disconnect client
             if self.client:
-                # Note: TikTokLive client doesn't have a direct stop method
-                # We'll set flags to handle this in event handlers
-                pass
-            
-            # Clear queue
-            while not self.comment_queue.empty():
                 try:
-                    self.comment_queue.get_nowait()
-                except Empty:
-                    break
-            
-            # Send stop message
+                    await self.client.disconnect()
+                except Exception as e:
+                    logger.warning(f"Error disconnecting TikTok client: {e}")
+
+            # Cancel task
+            if self._client_task and not self._client_task.done():
+                self._client_task.cancel()
+                try:
+                    await self._client_task
+                except asyncio.CancelledError:
+                    pass
+
+            self.current_host_id = None
+            self.client = None
+            self._client_task = None
+
             await self.send_message({
                 "type": "collector_stopped",
                 "message": "TikTok collector stopped"
             })
-            
+
             logger.info("TikTok collector stopped")
             return True
-            
+
         except Exception as e:
-            logger.error(f"Failed to stop TikTok collector: {str(e)}")
-            raise CollectorError(f"Failed to stop: {str(e)}", "tiktok", "STOP_FAILED")
-    
+            logger.error(f"Failed to stop TikTok collector: {e}")
+            raise CollectorError(f"Failed to stop: {e}", "tiktok", "STOP_FAILED")
+
     def _setup_event_handlers(self):
-        """Set up TikTokLive event handlers"""
-        
-        @self.client.on("connect")
-        async def on_connect():
+        """Set up TikTokLive v6 event handlers"""
+
+        @self.client.on(ConnectEvent)
+        async def on_connect(event: ConnectEvent):
             self.is_connected = True
-            logger.info(f"Connected to TikTok stream: @{self.current_host_id}")
-            
-            # Send connection message
+            logger.info(f"Connected to TikTok stream: @{event.unique_id} (room_id: {event.room_id})")
+
             asyncio.create_task(self.send_message({
                 "type": "platform_connected",
-                "host_id": self.current_host_id,
-                "message": f"Connected to TikTok stream: @{self.current_host_id}"
+                "host_id": event.unique_id,
+                "room_id": event.room_id,
+                "message": f"Connected to TikTok stream: @{event.unique_id}"
             }))
-        
-        @self.client.on("disconnect")
-        async def on_disconnect():
+
+        @self.client.on(DisconnectEvent)
+        async def on_disconnect(event: DisconnectEvent):
             self.is_connected = False
             self.is_running = False
             logger.info(f"Disconnected from TikTok stream: @{self.current_host_id}")
-            
-            # Send disconnection message
+
             asyncio.create_task(self.send_message({
                 "type": "platform_disconnected",
                 "host_id": self.current_host_id,
                 "message": f"Disconnected from TikTok stream: @{self.current_host_id}"
             }))
-        
-        @self.client.on("comment")
-        async def on_comment(comment):
-            await self._process_comment(comment)
-        
-        @self.client.on("gift")
-        async def on_gift(gift):
-            await self._process_gift(gift)
-        
-        @self.client.on("member")
-        async def on_member(member):
-            # Handle new member joins
-            username = getattr(member, 'username', 'New User')
+
+        @self.client.on(CommentEvent)
+        async def on_comment(event: CommentEvent):
+            await self._process_comment(event)
+
+        @self.client.on(GiftEvent)
+        async def on_gift(event: GiftEvent):
+            await self._process_gift(event)
+
+        @self.client.on(LikeEvent)
+        async def on_like(event: LikeEvent):
+            await self._process_like(event)
+
+        @self.client.on(JoinEvent)
+        async def on_join(event: JoinEvent):
+            await self._process_join(event)
+
+        @self.client.on(FollowEvent)
+        async def on_follow(event: FollowEvent):
+            await self._process_follow(event)
+
+        @self.client.on(ShareEvent)
+        async def on_share(event: ShareEvent):
+            await self._process_share(event)
+
+        @self.client.on(RoomUserSeqEvent)
+        async def on_room_stats(event: RoomUserSeqEvent):
+            await self._process_room_stats(event)
+
+        @self.client.on(LiveEndEvent)
+        async def on_live_end(event: LiveEndEvent):
+            logger.info(f"TikTok live ended for @{self.current_host_id}")
+            self.is_connected = False
+            self.is_running = False
+
             asyncio.create_task(self.send_message({
-                "type": "member_join",
-                "user": username,
-                "text": f"{username} joined the stream",
-                "message": f"{username} joined the stream"
+                "type": "live_ended",
+                "host_id": self.current_host_id,
+                "message": f"Live stream ended for @{self.current_host_id}"
             }))
-        
-        @self.client.on("room_update")
-        async def on_room_update(room_info):
-            # Handle room info updates
-            viewer_count = getattr(room_info, 'viewer_count', 0)
-            asyncio.create_task(self.send_message({
-                "type": "room_stats",
-                "text": f"Viewers: {viewer_count}",
-                "viewer_count": viewer_count,
-                "message": f"Current viewers: {viewer_count}"
-            }))
-    
-    async def _process_comment(self, comment):
+
+    async def _get_user_info(self, event) -> Dict[str, Any]:
+        """Extract user info from event"""
+        user = getattr(event, 'user', None)
+        if user is None:
+            return {"user_id": "", "nickname": "Anonymous", "display_id": ""}
+
+        user_id = getattr(user, 'id', '') or getattr(user, 'user_id', '')
+        nickname = getattr(user, 'nickname', '') or 'Anonymous'
+        display_id = getattr(user, 'display_id', '')
+
+        return {
+            "user_id": str(user_id) if user_id else "",
+            "nickname": nickname,
+            "display_id": display_id
+        }
+
+    async def _process_comment(self, event: CommentEvent):
         """Process incoming comment"""
         try:
-            # Extract comment data
-            user_id = getattr(comment, 'user_id', '')
-            username = getattr(comment, 'username', 'Anonymous')
-            content = getattr(comment, 'text', '')
-            
-            if not content or not content.strip():
+            content = event.comment or ''
+            if not content.strip():
                 return
-            
+
+            user_info = await self._get_user_info(event)
+
             # Detect language
             language = self.language_detector.detect_language(content)
-            
+
             # Update stats
             self.stats["total_comments"] += 1
-            
             if language == LanguageType.CHINESE:
                 self.stats["chinese_comments"] += 1
             elif language == LanguageType.VIETNAMESE:
                 self.stats["vietnamese_comments"] += 1
             elif language == LanguageType.ENGLISH:
                 self.stats["english_comments"] += 1
-            
-            # Send unified message
+
             await self.send_message({
                 "type": "comment",
-                "user": username,
+                "user": user_info["nickname"],
                 "text": content,
                 "language": language.value,
-                "user_id": user_id,
-                "message": f"{username}: {content}"
+                "user_id": user_info["user_id"],
+                "display_id": user_info["display_id"],
+                "message": f"{user_info['nickname']}: {content}"
             })
-            
+
         except Exception as e:
-            logger.error(f"Error processing TikTok comment: {str(e)}")
-            self.stats["errors"] += 1
-    
-    async def _process_gift(self, gift):
-        """Process incoming gift"""
-        try:
-            username = getattr(gift, 'username', 'Anonymous')
-            gift_name = getattr(gift, 'gift_name', 'Unknown Gift')
-            gift_count = getattr(gift, 'count', 1)
-            
-            # Update stats
-            self.stats["gifts_received"] += 1
-            
-            # Send unified message
-            await self.send_message({
-                "type": "gift",
-                "user": username,
-                "text": f"sent {gift_count} {gift_name}",
-                "gift_name": gift_name,
-                "gift_count": gift_count,
-                "message": f"{username} sent {gift_count}x {gift_name}"
-            })
-            
-        except Exception as e:
-            logger.error(f"Error processing TikTok gift: {str(e)}")
+            logger.error(f"Error processing TikTok comment: {e}")
             self.stats["errors"] += 1
 
+    async def _process_gift(self, event: GiftEvent):
+        """Process incoming gift"""
+        try:
+            user_info = await self._get_user_info(event)
+
+            # Extract gift info
+            gift = getattr(event, 'gift', None)
+            gift_name = getattr(gift, 'name', 'Unknown Gift') if gift else 'Unknown Gift'
+            diamond_count = getattr(gift, 'diamond_count', 0) if gift else 0
+            combo_count = getattr(event, 'combo_count', 1) or 1
+            repeat_count = getattr(event, 'repeat_count', 1) or 1
+            gift_count = max(combo_count, repeat_count)
+
+            self.stats["gifts_received"] += 1
+
+            await self.send_message({
+                "type": "gift",
+                "user": user_info["nickname"],
+                "text": f"🎁 {gift_name} x{gift_count}",
+                "gift_name": gift_name,
+                "gift_count": gift_count,
+                "diamond_count": diamond_count,
+                "user_id": user_info["user_id"],
+                "message": f"{user_info['nickname']} sent {gift_count}x {gift_name}"
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing TikTok gift: {e}")
+            self.stats["errors"] += 1
+
+    async def _process_like(self, event: LikeEvent):
+        """Process incoming like"""
+        try:
+            user_info = await self._get_user_info(event)
+            count = getattr(event, 'count', 1) or 1
+
+            self.stats["total_likes"] += 1
+
+            await self.send_message({
+                "type": "social",
+                "user": user_info["nickname"],
+                "text": f"👍 liked {count} times",
+                "social_type": "like",
+                "like_count": count,
+                "user_id": user_info["user_id"],
+                "message": f"{user_info['nickname']} liked {count}x"
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing TikTok like: {e}")
+            self.stats["errors"] += 1
+
+    async def _process_join(self, event: JoinEvent):
+        """Process member join"""
+        try:
+            user_info = await self._get_user_info(event)
+
+            self.stats["total_joins"] += 1
+
+            await self.send_message({
+                "type": "member_join",
+                "user": user_info["nickname"],
+                "text": f"{user_info['nickname']} joined the stream",
+                "user_id": user_info["user_id"],
+                "message": f"{user_info['nickname']} joined the stream"
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing TikTok join: {e}")
+            self.stats["errors"] += 1
+
+    async def _process_follow(self, event: FollowEvent):
+        """Process follow"""
+        try:
+            user_info = await self._get_user_info(event)
+
+            self.stats["total_follows"] += 1
+
+            await self.send_message({
+                "type": "social",
+                "user": user_info["nickname"],
+                "text": f"❤️ followed the streamer",
+                "social_type": "follow",
+                "user_id": user_info["user_id"],
+                "message": f"{user_info['nickname']} followed"
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing TikTok follow: {e}")
+            self.stats["errors"] += 1
+
+    async def _process_share(self, event: ShareEvent):
+        """Process share"""
+        try:
+            user_info = await self._get_user_info(event)
+
+            self.stats["total_shares"] += 1
+
+            await self.send_message({
+                "type": "social",
+                "user": user_info["nickname"],
+                "text": f"📤 shared the stream",
+                "social_type": "share",
+                "user_id": user_info["user_id"],
+                "message": f"{user_info['nickname']} shared"
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing TikTok share: {e}")
+            self.stats["errors"] += 1
+
+    async def _process_room_stats(self, event: RoomUserSeqEvent):
+        """Process room stats update"""
+        try:
+            total = getattr(event, 'total', 0) or 0
+            popularity = getattr(event, 'popularity', 0) or 0
+
+            self.stats["viewer_count"] = total
+
+            await self.send_message({
+                "type": "room_stats",
+                "user": "System",
+                "text": f"Viewers: {total}",
+                "viewer_count": total,
+                "popularity": popularity,
+                "message": f"Current viewers: {total}"
+            })
+
+        except Exception as e:
+            logger.error(f"Error processing TikTok room stats: {e}")
+            self.stats["errors"] += 1
+
+
 # Factory function
-def create_tiktok_collector(message_callback=None) -> Optional[TikTokCollector]:
+def create_tiktok_collector(message_callback: Optional[Callable] = None) -> Optional[TikTokCollector]:
     """Create TikTok collector instance"""
     try:
         return TikTokCollector(message_callback)
     except CollectorError as e:
-        logger.error(f"Cannot create TikTok collector: {str(e)}")
+        logger.error(f"Cannot create TikTok collector: {e}")
         return None
     except Exception as e:
-        logger.error(f"Unexpected error creating TikTok collector: {str(e)}")
+        logger.error(f"Unexpected error creating TikTok collector: {e}")
         return None

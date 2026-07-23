@@ -27,6 +27,8 @@ config.json
 .env.local
 *.log
 cleanup_report_*
+*_202607*.md
+*_2026072*.md
 
 # 5. IDE / 编辑器
 .vscode/

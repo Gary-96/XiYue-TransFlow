@@ -16,7 +16,13 @@ const electronAPI = {
   },
 
   // 打开后端日志文件
-  openBackendLog: () => ipcRenderer.invoke('backend:open-log')
+  openBackendLog: () => ipcRenderer.invoke('backend:open-log'),
+
+  // ── 自动更新 ──────────────────────────────
+  checkForUpdate: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
+  quitAndInstall: () => ipcRenderer.invoke('update:quit-and-install'),
+  getAppVersion: () => ipcRenderer.invoke('update:get-version'),
 }
 
 export type ElectronAPI = typeof electronAPI

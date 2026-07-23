@@ -135,6 +135,9 @@ export function useAudioWebSocket(deviceId?: number | null) {
   const streamRef = useRef<MediaStream | null>(null)
   const processorRef = useRef<ScriptProcessorNode | null>(null)
 
+  // 频谱数据回调（供 AudioSpectrum 组件订阅，避免重复 WS 连接）
+  const spectrumCallbackRef = useRef<((data: number[]) => void) | null>(null)
+
   // deviceId 变化时，如果正在录音，自动重启
   const deviceIdRef = useRef<number | null | undefined>(deviceId)
   useEffect(() => {
@@ -189,10 +192,15 @@ export function useAudioWebSocket(deviceId?: number | null) {
 
       ws.onmessage = (event) => {
         try {
-          const data: AudioTranscription = JSON.parse(event.data)
+          const data = JSON.parse(event.data)
           if (data.type === 'audio_transcription') {
             setTranscription(data)
             setHistory((prev) => [...prev.slice(-50), data])
+          } else if (data.type === 'audio_spectrum' && Array.isArray(data.data)) {
+            // 分发频谱数据给订阅者
+            if (spectrumCallbackRef.current) {
+              spectrumCallbackRef.current(data.data)
+            }
           }
         } catch (e) {
           console.error('[Audio WS] 解析失败:', e)
@@ -257,11 +265,17 @@ export function useAudioWebSocket(deviceId?: number | null) {
     return () => stopRecording()
   }, [stopRecording])
 
+  // 注册频谱数据回调
+  const setSpectrumCallback = useCallback((cb: ((data: number[]) => void) | null) => {
+    spectrumCallbackRef.current = cb
+  }, [])
+
   return {
     transcription,
     history,
     isRecording,
     startRecording,
     stopRecording,
+    setSpectrumCallback,
   }
 }

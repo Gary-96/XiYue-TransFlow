@@ -1,21 +1,19 @@
 """
 乐曼同传 Leman Translate — 配置管理器
-负责 API Key 持久化、服务商切换、连通性校验
+负责 API Key 持久化、服务商切换、连通性校验、抖音/TikTok 采集配置与代理设置
 """
-import json
-import os
-import sys
-import logging
 import asyncio
-from typing import Optional, Dict, Any
+import json
+import logging
+import os
 from pathlib import Path
+import sys
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
-# ── 路径解析 ──────────────────────────────────────────────
-# 打包后 Electron 把 backend 放在 extraResources/backend，
-# 用户配置写到 appData 目录；开发模式写项目根目录。
 
+# ── 路径解析 ──────────────────────────────────────────────
 def _get_config_dir() -> Path:
     """获取配置文件目录"""
     # 1. 打包模式：使用系统 appData
@@ -49,24 +47,28 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "gemini": "",
         "groq": "",
         "deepseek": "",
-        "openai": ""
+        "openai": "",
     },
     "custom_endpoints": {
         "gemini": "",
         "groq": "https://api.groq.com/openai/v1",
         "deepseek": "https://api.deepseek.com/v1",
-        "openai": "https://api.openai.com/v1"
+        "openai": "https://api.openai.com/v1",
     },
     "models": {
         "gemini": "gemini-1.5-flash",
         "groq": "llama-3.3-70b-versatile",
         "deepseek": "deepseek-chat",
-        "openai": "gpt-4o-mini"
+        "openai": "gpt-4o-mini",
     },
     "mode": "auto",  # auto | manual
     "audio_device_id": None,  # None = system default; int = device index
     "voice_id": "zh-CN-female-1",  # TTS 音色 ID
     "language_pair": {"src_lang": "zh", "tgt_lang": "vi"},  # 源语言 → 目标语言
+    # ── 新增：弹幕抓取与风控配置 ─────────────────────────
+    "douyin_cookie": "",  # 抖音网页版 Cookie (防止风控)
+    "tiktok_unique_id": "",  # TikTok 主播账号 ID
+    "proxy_url": "http://127.0.0.1:10808",  # HTTP/SOCKS5 代理地址
 }
 
 # ── 服务商元数据 ──────────────────────────────────────────
@@ -74,23 +76,23 @@ PROVIDER_META: Dict[str, Dict[str, str]] = {
     "gemini": {
         "label": "Google Gemini",
         "env_key": "GEMINI_API_KEY",
-        "label_zh": "Google Gemini（默认）"
+        "label_zh": "Google Gemini（默认）",
     },
     "groq": {
         "label": "Groq",
         "env_key": "GROQ_API_KEY",
-        "label_zh": "Groq（超低延迟）"
+        "label_zh": "Groq（超低延迟）",
     },
     "deepseek": {
         "label": "DeepSeek",
         "env_key": "DEEPSEEK_API_KEY",
-        "label_zh": "DeepSeek（高性价比）"
+        "label_zh": "DeepSeek（高性价比）",
     },
     "openai": {
         "label": "OpenAI",
         "env_key": "OPENAI_API_KEY",
-        "label_zh": "OpenAI（全能）"
-    }
+        "label_zh": "OpenAI（全能）",
+    },
 }
 
 
@@ -116,9 +118,8 @@ class ConfigManager:
 
     def _load(self) -> None:
         """从磁盘加载配置，合并环境变量"""
-        # 先从环境变量读取（.env / .env.example 中配置）
         env_config = self._read_env()
-        
+
         if CONFIG_PATH.exists():
             try:
                 with open(CONFIG_PATH, "r", encoding="utf-8") as f:
@@ -130,7 +131,9 @@ class ConfigManager:
                     if not self._config["keys"].get(provider):
                         self._config["keys"][provider] = key
             except Exception as e:
-                logger.warning(f"Failed to load config.json: {e}, using defaults")
+                logger.warning(
+                    f"Failed to load config.json: {e}, using defaults"
+                )
                 self._config = json.loads(json.dumps(DEFAULT_CONFIG))
                 self._config["keys"].update(env_config)
         else:
@@ -141,7 +144,9 @@ class ConfigManager:
 
         # 同步环境变量供其他模块使用
         self._sync_env()
-        logger.info(f"Config loaded | provider={self._config['current_provider']} | path={CONFIG_PATH}")
+        logger.info(
+            f"Config loaded | provider={self._config['current_provider']} | path={CONFIG_PATH}"
+        )
 
     def _read_env(self) -> Dict[str, str]:
         """从环境变量读取 API Keys"""
@@ -153,11 +158,17 @@ class ConfigManager:
         return keys
 
     def _sync_env(self) -> None:
-        """把当前配置同步到环境变量，供 translation_service 等模块读取"""
+        """把当前配置同步到环境变量，供 translation_service 与 collector 读取"""
         for provider, meta in PROVIDER_META.items():
             key = self._config.get("keys", {}).get(provider, "")
             if key:
                 os.environ[meta["env_key"]] = key
+
+        # 代理设置同步到环境变量
+        proxy = self._config.get("proxy_url", "")
+        if proxy:
+            os.environ["HTTP_PROXY"] = proxy
+            os.environ["HTTPS_PROXY"] = proxy
 
     def _save(self) -> bool:
         """保存配置到磁盘"""
@@ -175,7 +186,11 @@ class ConfigManager:
         """深度合并字典"""
         result = json.loads(json.dumps(base))
         for k, v in override.items():
-            if k in result and isinstance(result[k], dict) and isinstance(v, dict):
+            if (
+                k in result
+                and isinstance(result[k], dict)
+                and isinstance(v, dict)
+            ):
                 result[k] = ConfigManager._deep_merge(result[k], v)
             else:
                 result[k] = v
@@ -227,7 +242,16 @@ class ConfigManager:
 
     def get_language_pair(self) -> Dict[str, str]:
         """获取当前语言对"""
-        return self._config.get("language_pair", {"src_lang": "zh", "tgt_lang": "vi"})
+        return self._config.get(
+            "language_pair", {"src_lang": "zh", "tgt_lang": "vi"}
+        )
+
+    # 新增：获取弹幕与代理配置 getter
+    def get_douyin_cookie(self) -> str:
+        return self._config.get("douyin_cookie", "")
+
+    def get_proxy_url(self) -> str:
+        return self._config.get("proxy_url", "")
 
     # ── 写入 ─────────────────────────────────────────────
 
@@ -245,14 +269,15 @@ class ConfigManager:
         if provider not in PROVIDER_META:
             return False
         self._config.setdefault("keys", {})[provider] = api_key.strip()
-        # 同步环境变量
         meta = PROVIDER_META[provider]
         os.environ[meta["env_key"]] = api_key.strip()
         return self._save()
 
     def set_endpoint(self, provider: str, endpoint: str) -> bool:
         """设置自定义端点"""
-        self._config.setdefault("custom_endpoints", {})[provider] = endpoint.strip()
+        self._config.setdefault("custom_endpoints", {})[provider] = (
+            endpoint.strip()
+        )
         return self._save()
 
     def set_mode(self, mode: str) -> bool:
@@ -271,14 +296,17 @@ class ConfigManager:
         if "keys" in updates and isinstance(updates["keys"], dict):
             for provider, key in updates["keys"].items():
                 if provider in PROVIDER_META and key and key != "****":
-                    # 跳过脱敏值（前端回传的占位符）
                     if "****" not in str(key):
                         self._config["keys"][provider] = str(key).strip()
 
-        if "custom_endpoints" in updates and isinstance(updates["custom_endpoints"], dict):
+        if "custom_endpoints" in updates and isinstance(
+            updates["custom_endpoints"], dict
+        ):
             for provider, ep in updates["custom_endpoints"].items():
                 if provider in PROVIDER_META:
-                    self._config["custom_endpoints"][provider] = str(ep).strip()
+                    self._config["custom_endpoints"][provider] = str(
+                        ep
+                    ).strip()
 
         if "models" in updates and isinstance(updates["models"], dict):
             for provider, model in updates["models"].items():
@@ -296,73 +324,119 @@ class ConfigManager:
         if "voice_id" in updates and isinstance(updates["voice_id"], str):
             self._config["voice_id"] = updates["voice_id"]
 
-        if "language_pair" in updates and isinstance(updates["language_pair"], dict):
+        if "language_pair" in updates and isinstance(
+            updates["language_pair"], dict
+        ):
             src = updates["language_pair"].get("src_lang", "")
             tgt = updates["language_pair"].get("tgt_lang", "")
             if src and tgt:
-                self._config["language_pair"] = {"src_lang": src, "tgt_lang": tgt}
+                self._config["language_pair"] = {
+                    "src_lang": src,
+                    "tgt_lang": tgt,
+                }
+
+        # ── 新增：允许更新弹幕 Cookie、TikTok ID 和代理 ────
+        if "douyin_cookie" in updates and isinstance(
+            updates["douyin_cookie"], str
+        ):
+            self._config["douyin_cookie"] = updates["douyin_cookie"].strip()
+
+        if "tiktok_unique_id" in updates and isinstance(
+            updates["tiktok_unique_id"], str
+        ):
+            self._config["tiktok_unique_id"] = updates[
+                "tiktok_unique_id"
+            ].strip()
+
+        if "proxy_url" in updates and isinstance(updates["proxy_url"], str):
+            self._config["proxy_url"] = updates["proxy_url"].strip()
 
         self._sync_env()
         return self._save()
 
     # ── API Key 校验 ─────────────────────────────────────
 
-    async def validate_api_key(self, provider: str, api_key: str) -> Dict[str, Any]:
+    async def validate_api_key(
+        self, provider: str, api_key: str
+    ) -> Dict[str, Any]:
         """
         校验 API Key 连通性：向服务商发送一个极简 test prompt
-        
-        Returns:
-            {"valid": bool, "message": str, "latency_ms": int}
         """
         if provider not in PROVIDER_META:
-            return {"valid": False, "message": f"不支持的服务商: {provider}", "latency_ms": 0}
+            return {
+                "valid": False,
+                "message": f"不支持的服务商: {provider}",
+                "latency_ms": 0,
+            }
 
         if not api_key or not api_key.strip():
-            return {"valid": False, "message": "API Key 不能为空", "latency_ms": 0}
+            return {
+                "valid": False,
+                "message": "API Key 不能为空",
+                "latency_ms": 0,
+            }
 
-        # 脱敏占位符不校验
         if "****" in api_key:
-            return {"valid": False, "message": "请输入完整的 API Key", "latency_ms": 0}
+            return {
+                "valid": False,
+                "message": "请输入完整的 API Key",
+                "latency_ms": 0,
+            }
 
         import time
+
         start = time.time()
 
         try:
             if provider == "gemini":
                 result = await self._validate_gemini(api_key.strip())
             elif provider in ("groq", "deepseek", "openai"):
-                endpoint = self._config.get("custom_endpoints", {}).get(provider, "")
+                endpoint = self._config.get("custom_endpoints", {}).get(
+                    provider, ""
+                )
                 model = self._config.get("models", {}).get(provider, "")
                 result = await self._validate_openai_compatible(
                     provider, api_key.strip(), endpoint, model
                 )
             else:
-                result = {"valid": False, "message": f"未实现的校验: {provider}"}
+                result = {
+                    "valid": False,
+                    "message": f"未实现的校验: {provider}",
+                }
 
             latency = int((time.time() - start) * 1000)
             result["latency_ms"] = latency
             return result
 
         except asyncio.TimeoutError:
-            return {"valid": False, "message": "连接超时（15秒）", "latency_ms": 15000}
+            return {
+                "valid": False,
+                "message": "连接超时（15秒）",
+                "latency_ms": 15000,
+            }
         except Exception as e:
             latency = int((time.time() - start) * 1000)
-            return {"valid": False, "message": f"校验异常: {str(e)}", "latency_ms": latency}
+            return {
+                "valid": False,
+                "message": f"校验异常: {str(e)}",
+                "latency_ms": latency,
+            }
 
     async def _validate_gemini(self, api_key: str) -> Dict[str, Any]:
         """校验 Gemini API Key"""
         try:
             import google.generativeai as genai
+
             genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-1.5-flash')
+            model = genai.GenerativeModel("gemini-1.5-flash")
 
             loop = asyncio.get_event_loop()
+
             def test():
                 return model.generate_content("Hi")
-            
+
             await asyncio.wait_for(
-                loop.run_in_executor(None, test),
-                timeout=15
+                loop.run_in_executor(None, test), timeout=15
             )
             return {"valid": True, "message": "Gemini API Key 验证成功"}
         except Exception as e:
@@ -381,38 +455,59 @@ class ConfigManager:
             return {"valid": False, "message": "缺少 aiohttp 依赖"}
 
         if not endpoint:
-            return {"valid": False, "message": f"未配置 {provider} 的 API 端点"}
+            return {
+                "valid": False,
+                "message": f"未配置 {provider} 的 API 端点",
+            }
 
         if not model:
-            return {"valid": False, "message": f"未配置 {provider} 的模型名"}
+            return {
+                "valid": False,
+                "message": f"未配置 {provider} 的模型名",
+            }
 
         url = f"{endpoint.rstrip('/')}/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": "Hi"}],
             "max_tokens": 5,
-            "stream": False
+            "stream": False,
         }
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
-                    url, headers=headers, json=payload, timeout=aiohttp.ClientTimeout(total=15)
+                    url,
+                    headers=headers,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=15),
                 ) as resp:
                     if resp.status == 200:
-                        return {"valid": True, "message": f"{PROVIDER_META[provider]['label']} API Key 验证成功"}
+                        return {
+                            "valid": True,
+                            "message": f"{PROVIDER_META[provider]['label']} API Key 验证成功",
+                        }
                     elif resp.status == 401:
                         body = await resp.text()
-                        return {"valid": False, "message": f"API Key 无效（401）: {body[:100]}"}
+                        return {
+                            "valid": False,
+                            "message": f"API Key 无效（401）: {body[:100]}",
+                        }
                     elif resp.status == 404:
-                        return {"valid": False, "message": f"模型不存在（404）: 检查 {model}"}
+                        return {
+                            "valid": False,
+                            "message": f"模型不存在（404）: 检查 {model}",
+                        }
                     else:
                         body = await resp.text()
-                        return {"valid": False, "message": f"HTTP {resp.status}: {body[:150]}"}
+                        return {
+                            "valid": False,
+                            "message": f"HTTP {resp.status}: {body[:150]}",
+                        }
         except aiohttp.ClientConnectorError:
             return {"valid": False, "message": f"无法连接到 {endpoint}"}
         except aiohttp.ClientError as e:

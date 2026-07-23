@@ -6,6 +6,7 @@ import json
 import random
 import base64
 import urllib
+import os
 from os import path
 
 import requests
@@ -16,20 +17,72 @@ from functools import partial
 subprocess.Popen = partial(subprocess.Popen, encoding="utf-8")
 import execjs
 
-if getattr(sys, 'frozen', None):
-    basedir = sys._MEIPASS
-else:
-    basedir = path.dirname(__file__)
+
+def _get_base_dir():
+    """获取基础目录，兼容 PyInstaller 打包和开发环境"""
+    if getattr(sys, 'frozen', False):
+        # PyInstaller 打包后，资源解压到 sys._MEIPASS
+        return sys._MEIPASS
+    else:
+        # 开发环境：backend/utils/dy_util.py -> backend/
+        return path.dirname(path.dirname(path.abspath(__file__)))
 
 
-try:
-    node_modules = path.join(basedir, 'static', 'node_modules')
-    login_path = path.join(basedir, 'static', 'login.js')
-    login_js = execjs.compile(open(login_path, 'r', encoding='utf-8').read(), cwd=node_modules)
-except:
-    node_modules = path.join(basedir, '..', 'static', 'node_modules')
-    login_path = path.join(basedir, '..', 'static', 'login.js')
-    login_js = execjs.compile(open(login_path, 'r', encoding='utf-8').read(), cwd=node_modules)
+def _get_static_path(filename):
+    """获取 static/ 目录下文件的绝对路径，兼容打包环境"""
+    base = _get_base_dir()
+    # 优先尝试 base/static/filename
+    p = path.join(base, 'static', filename)
+    if path.exists(p):
+        return p
+    # 回退：base/filename（某些打包结构可能直接放在根目录）
+    p2 = path.join(base, filename)
+    if path.exists(p2):
+        return p2
+    # 最后回退：原基于 __file__ 的路径
+    return path.join(path.dirname(path.abspath(__file__)), 'static', filename)
+
+
+def _get_node_modules_dir():
+    """获取 node_modules 目录路径"""
+    base = _get_base_dir()
+    # 尝试 static/node_modules
+    nm = path.join(base, 'static', 'node_modules')
+    if path.isdir(nm):
+        return nm
+    # 尝试 base/node_modules
+    nm2 = path.join(base, 'node_modules')
+    if path.isdir(nm2):
+        return nm2
+    # 不存在时返回 static/node_modules（让 execjs 自行处理）
+    return nm
+
+
+_base_dir = _get_base_dir()
+_node_modules = _get_node_modules_dir()
+
+# 编译 JS 文件
+_login_js = None
+_dy_js = None
+_sign_js = None
+
+
+def _compile_js(filepath, cwd):
+    """安全编译 JS 文件，失败时抛出明确错误"""
+    if not path.exists(filepath):
+        raise FileNotFoundError(f"JS 文件不存在: {filepath}")
+    with open(filepath, 'r', encoding='utf-8') as f:
+        return execjs.compile(f.read(), cwd=cwd)
+
+
+# 延迟初始化，避免导入时崩溃
+_login_path = _get_static_path('login.js')
+_dy_path = _get_static_path('dy_ab.js')
+_sign_path = _get_static_path('dy_live_sign.js')
+
+login_js = _compile_js(_login_path, _node_modules)
+dy_js = _compile_js(_dy_path, _node_modules)
+sign_js = _compile_js(_sign_path, _node_modules)
 
 
 def generateSecretPhoneNum(phone):
@@ -38,20 +91,6 @@ def generateSecretPhoneNum(phone):
 def generateSecretCode(phone, code):
     sign = login_js.call('generateSecretCode', phone, code)
     return sign
-
-try:
-    node_modules = path.join(basedir, 'node_modules')
-    dy_path = path.join(basedir, 'static', 'dy_ab.js')
-    dy_js = execjs.compile(open(dy_path, 'r', encoding='utf-8').read(), cwd=node_modules)
-    sign_path = path.join(basedir, 'static', 'dy_live_sign.js')
-    sign_js = execjs.compile(open(sign_path, 'r', encoding='utf-8').read(), cwd=node_modules)
-except:
-    node_modules = path.join(basedir, '..', 'node_modules')
-    dy_path = path.join(basedir, '..', 'static', 'dy_ab.js')
-    dy_js = execjs.compile(open(dy_path, 'r', encoding='utf-8').read(), cwd=node_modules)
-    sign_path = path.join(basedir, '..', 'static', 'dy_live_sign.js')
-    sign_js = execjs.compile(open(sign_path, 'r', encoding='utf-8').read(), cwd=node_modules)
-
 
 def trans_cookies(cookies_str):
     cookies = {

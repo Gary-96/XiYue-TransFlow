@@ -93,6 +93,14 @@ export default function SettingsPanel() {
   const [tgtLang, setTgtLang] = useState<string>('vi')
   const [languageAvailable, setLanguageAvailable] = useState<Record<string, { label: string; icon: string }>>(LANGUAGES)
 
+  // Toast 自动消失
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3500)
+      return () => clearTimeout(timer)
+    }
+  }, [toast])
+
   // ── 加载配置 ──────────────────────────────────────────
   const loadConfig = useCallback(async () => {
     setLoading(true)
@@ -250,29 +258,28 @@ export default function SettingsPanel() {
 
   // ── 语言切换 ─────────────────────────────────────────
   const handleSetLanguage = async (langType: 'src' | 'tgt', langCode: string) => {
-    if (langType === 'src') {
-      setSrcLang(langCode)
-    } else {
-      setTgtLang(langCode)
-    }
-    // 延迟一下让用户看到选择变化再发请求
-    setTimeout(async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/language/set`, {
+    // 先计算最新语言对，避免 setState 异步导致 stale state
+    const newSrc = langType === 'src' ? langCode : srcLang
+    const newTgt = langType === 'tgt' ? langCode : tgtLang
+
+    if (langType === 'src') setSrcLang(langCode)
+    else setTgtLang(langCode)
+
+    try {
+      const res = await fetch(`${API_BASE}/api/language/set`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ src_lang: srcLang, tgt_lang: tgtLang }),
+          body: JSON.stringify({ src_lang: newSrc, tgt_lang: newTgt }),
         })
         const data = await res.json()
         if (data.status === 'success') {
-          setToast({ type: 'success', msg: `🌐 语言已切换: ${LANGUAGES[srcLang]?.icon || ''}${LANGUAGES[srcLang]?.label || srcLang} → ${LANGUAGES[tgtLang]?.icon || ''}${LANGUAGES[tgtLang]?.label || tgtLang}` })
+          setToast({ type: 'success', msg: `🌐 语言已切换: ${LANGUAGES[newSrc]?.icon || ''}${LANGUAGES[newSrc]?.label || newSrc} → ${LANGUAGES[newTgt]?.icon || ''}${LANGUAGES[newTgt]?.label || newTgt}` })
         } else {
           setToast({ type: 'error', msg: data.message || '切换失败' })
         }
       } catch (e) {
         setToast({ type: 'error', msg: `网络错误` })
-      }
-    }, 150)
+    }
   }
 
   const handleSwitchLanguage = async () => {
@@ -1214,7 +1221,8 @@ export default function SettingsPanel() {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
-      `}</style>
+
+`}</style>
     </div>
   )
 }

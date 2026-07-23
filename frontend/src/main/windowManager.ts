@@ -38,7 +38,9 @@ class WindowManager {
     })
 
     // 开发环境加载 dev server，生产环境加载打包文件
-    if (process.env.NODE_ENV === 'development' || process.env.VITE_DEV_SERVER_URL) {
+    // 使用 app.isPackaged 判断，避免 NODE_ENV 在打包后仍为 development 导致误开 DevTools
+    const { app } = require('electron')
+    if (!app.isPackaged) {
       win.loadURL('http://localhost:5173')
       win.webContents.openDevTools({ mode: 'detach' })
     } else {

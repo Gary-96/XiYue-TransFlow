@@ -32,6 +32,7 @@ set PY=C:\Users\k9831\AppData\Local\Programs\Python\Python310\python.exe
     --distpath "output\backend_engine" ^
     --workpath "output\build_backend\backend_engine" ^
     --specpath "output\build_backend" ^
+    --add-data "backend\static;static" ^
     --collect-all faster_whisper ^
     --collect-all ctranslate2 ^
     --collect-all onnxruntime ^

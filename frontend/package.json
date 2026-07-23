@@ -1,7 +1,7 @@
 {
   "name": "leman-translate",
-  "version": "3.0.0",
-  "description": "乐曼同传 Leman Translate - 中越直播同声传译工具",
+  "version": "0.1.1",
+  "description": "乐曼同传小助手 - 中越直播同声传译工具",
   "main": "dist-electron/main/index.js",
   "scripts": {
     "dev": "vite",
@@ -11,9 +11,10 @@
     "electron:build": "vite build && electron-builder"
   },
   "dependencies": {
+    "electron-updater": "^6.8.9",
+    "framer-motion": "^11.3.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "framer-motion": "^11.3.0"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
@@ -30,7 +31,7 @@
   },
   "build": {
     "appId": "com.leman.translate",
-    "productName": "乐曼同传",
+    "productName": "乐曼同传小助手",
     "directories": {
       "output": "../output"
     },
@@ -50,19 +51,28 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "shortcutName": "乐曼同传",
+      "shortcutName": "乐曼同传小助手",
       "include": "build/installer.nsh"
     },
     "asar": true,
     "asarUnpack": [
       "dist-electron/**/*"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Gary-96",
+        "repo": "leman-translate"
+      }
     ]
   }
 }

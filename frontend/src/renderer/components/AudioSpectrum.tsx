@@ -27,15 +27,16 @@ interface PeakState {
 export default function AudioSpectrum({
   height = 40,
   className = '',
+  spectrumData,
 }: {
   height?: number
   className?: string
+  spectrumData?: number[]
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const wsRef = useRef<WebSocket | null>(null)
   const animationRef = useRef<number>()
 
-  // 频谱数据 (0~100) — 来自后端
+  // 频谱数据 (0~100) — 来自父组件（useAudioWebSocket 统一 WS 连接）
   const spectrumDataRef = useRef<number[]>(new Array(BAND_COUNT).fill(0))
   // 平滑后的当前值 (0~1) — 用于绘制
   const smoothRef = useRef<number[]>(new Array(BAND_COUNT).fill(0))
@@ -44,54 +45,14 @@ export default function AudioSpectrum({
     Array.from({ length: BAND_COUNT }, () => ({ value: 0, holdTimer: 0 }))
   )
 
-  // ── WebSocket 连接 ──────────────────────────────────
+  // ── 接收外部频谱数据 ────────────────────────────────
   useEffect(() => {
-    let reconnectTimer: number
-    let isDestroyed = false
-
-    const connect = () => {
-      if (isDestroyed) return
-      const ws = new WebSocket('ws://localhost:8000/ws/audio')
-      ws.binaryType = 'arraybuffer'
-
-      ws.onopen = () => {
-        console.log('[Spectrum WS] 已连接')
+    if (spectrumData && Array.isArray(spectrumData)) {
+      for (let i = 0; i < BAND_COUNT && i < spectrumData.length; i++) {
+        spectrumDataRef.current[i] = spectrumData[i]
       }
-
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data)
-          if (msg.type === 'audio_spectrum' && Array.isArray(msg.data)) {
-            // 更新频谱数据
-            const incoming = msg.data as number[]
-            for (let i = 0; i < BAND_COUNT && i < incoming.length; i++) {
-              spectrumDataRef.current[i] = incoming[i]
-            }
-          }
-        } catch {
-          // 忽略非 JSON 消息（如 PCM binary）
-        }
-      }
-
-      ws.onclose = () => {
-        if (!isDestroyed) {
-          console.log('[Spectrum WS] 断开，3s 后重连')
-          reconnectTimer = window.setTimeout(connect, 3000)
-        }
-      }
-
-      ws.onerror = () => ws.close()
-      wsRef.current = ws
     }
-
-    connect()
-
-    return () => {
-      isDestroyed = true
-      clearTimeout(reconnectTimer)
-      wsRef.current?.close()
-    }
-  }, [])
+  }, [spectrumData])
 
   // ── Canvas 渲染循环 ──────────────────────────────────
   const draw = useCallback(() => {

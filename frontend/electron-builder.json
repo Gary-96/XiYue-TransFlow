@@ -1,7 +1,7 @@
 {
   "appId": "com.leman.translate",
-  "productName": "乐曼同传",
-  "copyright": "Copyright © 2026 乐曼同传 Leman Translate",
+  "productName": "乐曼同传小助手",
+  "copyright": "Copyright © 2026 乐曼同传小助手",
   "directories": {
     "output": "../output"
   },
@@ -30,11 +30,18 @@
   "nsis": {
     "oneClick": false,
     "allowToChangeInstallationDirectory": true,
-    "shortcutName": "乐曼同传",
+    "shortcutName": "乐曼同传小助手",
     "include": "build/installer.nsh"
   },
   "asar": true,
   "asarUnpack": [
     "dist-electron/**/*"
+  ],
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "Gary-96",
+      "repo": "leman-translate"
+    }
   ]
 }

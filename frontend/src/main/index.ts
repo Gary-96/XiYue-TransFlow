@@ -3,6 +3,7 @@ import { join } from 'path'
 import { spawn, execSync, ChildProcess } from 'child_process'
 import { existsSync, mkdirSync, appendFileSync } from 'fs'
 import { windowManager } from './windowManager'
+import { initAutoUpdater } from './autoUpdater'
 import net from 'net'
 
 // ── 状态 ──────────────────────────────────────────────────────
@@ -248,6 +249,9 @@ app.whenReady().then(() => {
   // 3. 轮询等待后端就绪
   waitForBackendAndCreateWindow()
 
+  // 4. 初始化自动更新
+  initAutoUpdater()
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       windowManager.createDashboard()
@@ -275,7 +279,10 @@ ipcMain.handle('window:toggle-always-on-top', () => {
 })
 
 ipcMain.handle('window:toggle-devtools', () => {
-  BrowserWindow.getFocusedWindow()?.webContents.toggleDevTools()
+  // 仅开发环境允许手动切换 DevTools
+  if (!app.isPackaged) {
+    BrowserWindow.getFocusedWindow()?.webContents.toggleDevTools()
+  }
 })
 
 ipcMain.handle('shell:open-external', (_event, url: string) => {

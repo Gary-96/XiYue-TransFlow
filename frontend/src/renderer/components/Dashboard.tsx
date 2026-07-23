@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useStreamWebSocket, useAudioWebSocket, setLanguageChangedListener, setVoiceChangedListener } from '../hooks/useWebSocket'
 import { usePlatform } from '../hooks/usePlatform'
 import DanmakuPanel from './DanmakuPanel'
@@ -29,13 +29,22 @@ const API_BASE = 'http://localhost:8000'
 export default function Dashboard() {
   const { messages, status: wsStatus, clearMessages } = useStreamWebSocket()
   const [audioDeviceId, setAudioDeviceId] = useState<number | null>(null)
+  const [spectrumData, setSpectrumData] = useState<number[]>([])
   const {
     transcription,
     history,
     isRecording,
     startRecording,
     stopRecording,
+    setSpectrumCallback,
   } = useAudioWebSocket(audioDeviceId)
+
+  // 注册频谱回调：后端 audio_spectrum 消息通过单一 WS 连接分发
+  useEffect(() => {
+    setSpectrumCallback((data) => {
+      setSpectrumData([...data])
+    })
+  }, [setSpectrumCallback])
   const { status, switchPlatform, stopPlatform, fetchStatus, checkHealth } = usePlatform()
 
   const [platform, setPlatform] = useState<Platform>('douyin')
@@ -53,6 +62,13 @@ export default function Dashboard() {
   const [backendReady, setBackendReady] = useState(false)
   const [backendFailed, setBackendFailed] = useState(false)
   const [backendError, setBackendError] = useState<string>('')
+
+  // ── 自动更新状态（侧边栏底部卡片）────────────────────
+  const [appVersion, setAppVersion] = useState<string>('')
+  const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'>('idle')
+  const [updateVersion, setUpdateVersion] = useState<string>('')
+  const [downloadProgress, setDownloadProgress] = useState<{ percent: number; speed: string } | null>(null)
+  const [updateError, setUpdateError] = useState<string>('')
 
   // 监听后端就绪/失败事件
   useEffect(() => {
@@ -111,6 +127,61 @@ export default function Dashboard() {
         }
       })
       .catch(() => {/* 静默 */})
+  }, [])
+
+  // ── 自动更新：获取版本号 + 监听主进程事件 ────────────
+  useEffect(() => {
+    electron.getAppVersion().then((v: string) => setAppVersion(v))
+
+    const onAvailable = (info: unknown) => {
+      const i = info as { version: string }
+      setUpdateStatus('available')
+      setUpdateVersion(i.version)
+      setUpdateError('')
+    }
+    const onNotAvailable = () => {
+      setUpdateStatus('not-available')
+      setUpdateError('')
+    }
+    const onProgress = (data: unknown) => {
+      const d = data as { percent: number; bytesPerSecond: number }
+      setUpdateStatus('downloading')
+      const speedMB = (d.bytesPerSecond / 1048576).toFixed(1)
+      setDownloadProgress({ percent: d.percent, speed: `${speedMB} MB/s` })
+    }
+    const onDownloaded = () => {
+      setUpdateStatus('downloaded')
+      setDownloadProgress(null)
+    }
+    const onError = (data: unknown) => {
+      const d = data as { message: string }
+      setUpdateStatus('error')
+      setUpdateError(d.message)
+    }
+
+    electron.on('update-available', onAvailable)
+    electron.on('update-not-available', onNotAvailable)
+    electron.on('download-progress', onProgress)
+    electron.on('update-downloaded', onDownloaded)
+    electron.on('update:error', onError)
+  }, [])
+
+  const handleCheckUpdate = useCallback(async () => {
+    setUpdateStatus('checking')
+    setUpdateError('')
+    setUpdateVersion('')
+    setDownloadProgress(null)
+    await electron.checkForUpdate()
+  }, [])
+
+  const handleDownloadUpdate = useCallback(async () => {
+    setUpdateStatus('downloading')
+    setUpdateError('')
+    await electron.downloadUpdate()
+  }, [])
+
+  const handleQuitAndInstall = useCallback(async () => {
+    await electron.quitAndInstall()
   }, [])
 
   // 语言切换处理
@@ -224,13 +295,10 @@ export default function Dashboard() {
       <header className="title-bar">
         <div className="brand">
           <span className="brand-icon">🌐</span>
-          <span className="brand-name">乐曼同传</span>
+          <span className="brand-name">乐曼同传小助手</span>
           <span className="brand-sub">LEMAN TRANSLATE</span>
         </div>
         <div className="window-controls">
-          <button className="ctrl-btn" onClick={() => electron.toggleDevTools()} title="开发者工具">
-            ⚙
-          </button>
           <button
             className={`ctrl-btn ${isPinned ? 'active' : ''}`}
             onClick={handleTogglePin}
@@ -369,7 +437,79 @@ export default function Dashboard() {
               <span className="rec-dot" />
               {isRecording ? '停止同传' : '开始同传'}
             </button>
-            <AudioSpectrum height={40} />
+            <AudioSpectrum height={40} spectrumData={spectrumData} />
+          </section>
+
+          {/* 版本与更新卡片 — 底部固定 */}
+          <section className="panel-section update-card-section">
+            <div className="update-card-version">
+              <span className="update-card-app-name">乐曼同传小助手</span>
+              <span className="update-card-version-tag">v{appVersion || '...'}</span>
+            </div>
+
+            {updateStatus === 'idle' && (
+              <button className="update-card-btn" onClick={handleCheckUpdate}>
+                🔍 检查更新
+              </button>
+            )}
+
+            {updateStatus === 'checking' && (
+              <button className="update-card-btn" disabled>
+                <span className="update-card-spinner" /> 正在检查...
+              </button>
+            )}
+
+            {updateStatus === 'not-available' && (
+              <div className="update-card-info">
+                <span className="update-card-icon">✅</span>
+                <span>已是最新版本</span>
+                <button className="update-card-btn-sm" onClick={handleCheckUpdate}>重新检查</button>
+              </div>
+            )}
+
+            {updateStatus === 'available' && (
+              <div className="update-card-available">
+                <div className="update-card-available-header">
+                  <span className="update-card-icon">🎉</span>
+                  <span>发现新版本 <strong>v{updateVersion}</strong></span>
+                </div>
+                <button className="update-card-btn" onClick={handleDownloadUpdate}>
+                  ⬇️ 下载更新
+                </button>
+              </div>
+            )}
+
+            {updateStatus === 'downloading' && downloadProgress && (
+              <div className="update-card-download">
+                <div className="update-card-download-header">
+                  <span>下载中 {downloadProgress.percent}%</span>
+                  <span className="update-card-speed">{downloadProgress.speed}</span>
+                </div>
+                <div className="update-card-progress-bar">
+                  <div className="update-card-progress-fill" style={{ width: `${downloadProgress.percent}%` }} />
+                </div>
+              </div>
+            )}
+
+            {updateStatus === 'downloaded' && (
+              <div className="update-card-downloaded">
+                <div className="update-card-downloaded-header">
+                  <span className="update-card-icon">✅</span>
+                  <span>下载完成，准备安装</span>
+                </div>
+                <button className="update-card-btn update-card-btn-restart" onClick={handleQuitAndInstall}>
+                  🔄 重启升级
+                </button>
+              </div>
+            )}
+
+            {updateStatus === 'error' && (
+              <div className="update-card-error">
+                <span className="update-card-icon">❌</span>
+                <span>更新失败: {updateError}</span>
+                <button className="update-card-btn-sm" onClick={handleCheckUpdate}>重试</button>
+              </div>
+            )}
           </section>
         </aside>
 
@@ -928,6 +1068,153 @@ export default function Dashboard() {
         .swap-btn:disabled {
           opacity: 0.4;
           cursor: not-allowed;
+        }
+
+        /* ── 版本与更新卡片（侧边栏底部） ── */
+        .update-card-section {
+          margin-top: auto;
+          padding-top: 16px;
+          border-top: 1px solid var(--border-glass);
+        }
+        .update-card-version {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 8px;
+        }
+        .update-card-app-name {
+          font-size: 12px;
+          font-weight: 600;
+          color: var(--text-secondary);
+        }
+        .update-card-version-tag {
+          font-size: 11px;
+          color: var(--accent-cyan);
+          background: rgba(0, 229, 255, 0.1);
+          border: 1px solid rgba(0, 229, 255, 0.2);
+          padding: 2px 8px;
+          border-radius: 6px;
+          font-family: 'SF Mono', 'Consolas', monospace;
+        }
+        .update-card-btn {
+          width: 100%;
+          padding: 8px;
+          border: 1px solid var(--border-glow);
+          border-radius: var(--radius-sm);
+          background: rgba(0, 229, 255, 0.05);
+          color: var(--accent-cyan);
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 500;
+          transition: var(--transition);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+        }
+        .update-card-btn:hover:not(:disabled) {
+          background: rgba(0, 229, 255, 0.12);
+          box-shadow: var(--glow-cyan);
+        }
+        .update-card-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .update-card-btn-sm {
+          padding: 3px 10px;
+          border: 1px solid var(--border-glass);
+          border-radius: 4px;
+          background: rgba(0, 0, 0, 0.2);
+          color: var(--text-secondary);
+          cursor: pointer;
+          font-size: 11px;
+          transition: var(--transition);
+        }
+        .update-card-btn-sm:hover {
+          background: var(--bg-glass-hover);
+          color: var(--text-primary);
+        }
+        .update-card-btn-restart {
+          animation: pulse-glow 2s ease-in-out infinite;
+        }
+        .update-card-info {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12px;
+          color: var(--text-secondary);
+          flex-wrap: wrap;
+        }
+        .update-card-available {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .update-card-available-header {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 12px;
+          color: var(--accent-green);
+        }
+        .update-card-download {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .update-card-download-header {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11px;
+          color: var(--text-primary);
+        }
+        .update-card-speed {
+          color: var(--accent-cyan);
+          font-family: 'SF Mono', 'Consolas', monospace;
+        }
+        .update-card-progress-bar {
+          height: 4px;
+          background: rgba(0, 0, 0, 0.3);
+          border-radius: 2px;
+          overflow: hidden;
+        }
+        .update-card-progress-fill {
+          height: 100%;
+          background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
+          border-radius: 2px;
+          transition: width 0.3s ease;
+        }
+        .update-card-downloaded {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .update-card-downloaded-header {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 12px;
+          color: var(--accent-green);
+        }
+        .update-card-error {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          color: var(--accent-red);
+          flex-wrap: wrap;
+        }
+        .update-card-icon {
+          font-size: 14px;
+          flex-shrink: 0;
+        }
+        .update-card-spinner {
+          width: 12px;
+          height: 12px;
+          border: 2px solid rgba(0, 16, 32, 0.3);
+          border-top-color: var(--accent-cyan);
+          border-radius: 50%;
+          animation: spin 0.6s linear infinite;
         }
       `}</style>
     </div>
