@@ -2,7 +2,7 @@
  * autoUpdater.ts — GitHub Releases 自动更新模块
  * 基于 electron-updater，封装 IPC 通信
  */
-import { ipcMain, BrowserWindow, app } from 'electron'
+import { ipcMain, app } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { windowManager } from './windowManager'
 

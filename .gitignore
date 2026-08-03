@@ -1,5 +1,5 @@
 # ========================================
-# 乐曼同传 - 源代码与打包产物完全隔离
+# 乐曼同传小助手 - 源代码与打包产物隔离
 # ========================================
 
 # 1. 隔离所有打包产物与构建临时文件
@@ -7,6 +7,7 @@
 *.exe
 *.dist
 *.build
+*.asar
 
 # 2. Python 依赖与编译缓存
 __pycache__/
@@ -16,8 +17,9 @@ venv/
 .venv/
 *.egg-info/
 
-# 3. Node.js / Electron 依赖与依赖包
+# 3. Node.js / Electron / Vite 依赖与依赖包
 node_modules/
+.vite/
 npm-debug.log*
 yarn-debug.log*
 
@@ -27,25 +29,33 @@ config.json
 .env.local
 *.log
 cleanup_report_*
-*_202607*.md
-*_2026072*.md
 
-# 5. IDE / 编辑器
+# 5. 忽略临时 MD 报告，但保留 prompts 目录下的同传灵魂文件
+*_2026*.md
+!README.md
+!**/prompts/*.md
+!**/prompts/**/*.md
+
+# 6. IDE / 编辑器配置文件
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# 6. OS
+# 7. OS 操作系统临时文件
 .DS_Store
 Thumbs.db
 
-# 7. 前端构建产物（已在 output/ 隔离，额外防护）
+# 8. 前端构建产物（已在 output/ 隔离，额外防护）
 frontend/dist/
 frontend/dist-electron/
 frontend/release/
 
-# 8. 后端构建产物（已在 output/ 隔离，额外防护）
+# 9. 后端构建产物（已在 output/ 隔离，额外防护）
 backend/dist/
 backend/build/
 backend/*.spec
+# Build artifacts
+build/
+backend_engine.spec
+output/

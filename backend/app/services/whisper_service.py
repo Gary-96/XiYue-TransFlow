@@ -8,117 +8,104 @@ from app.models.schemas import TranscriptionResult
 
 logger = logging.getLogger(__name__)
 
-class WhisperService:
-    def __init__(self):
-        # Configure device for M2 Pro (MPS acceleration)
-        if torch.backends.mps.is_available():
-            self.device = "mps"
-            logger.info("Using MPS (Metal Performance Shaders) for acceleration")
+# 全局 Whisper 模型实例（延迟加载）
+_model: Optional[WhisperModel] = None
+_model_loaded = False
+
+
+def _load_model():
+    """加载 Whisper 模型（延迟初始化，避免阻塞启动）"""
+    global _model, _model_loaded
+    if _model_loaded:
+        return True
+    try:
+        from config_manager import get_config_manager
+        import torch
+        cfg = get_config_manager()
+        model_size = cfg.get_whisper_model_size() or "base"
+        device_raw = cfg.get_whisper_device() or "auto"
+        if device_raw == "auto":
+            device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
-            self.device = "cpu"
-            logger.warning("MPS not available, falling back to CPU")
-        
-        # Initialize Whisper model
-        self.model = None
-        self._load_model()
-    
-    def _load_model(self):
-        """Load the Whisper model with appropriate configuration"""
-        try:
-            # Use a smaller model for real-time processing
-            model_size = "base"
-            
-            # Configure model based on device
-            if self.device == "mps":
-                # For MPS, we need to use CPU for now as faster-whisper has limited MPS support
-                # But we can still benefit from Apple Silicon optimization
-                self.model = WhisperModel(
-                    model_size,
-                    device="cpu",  # faster-whisper works best with CPU on Mac
-                    compute_type="float32"
-                )
-            else:
-                self.model = WhisperModel(
-                    model_size,
-                    device="cpu",
-                    compute_type="float32"
-                )
-            
-            logger.info(f"Whisper model loaded successfully (size: {model_size})")
-            
-        except Exception as e:
-            logger.error(f"Failed to load Whisper model: {str(e)}")
-            raise
-    
-    async def transcribe_audio(self, audio_data: np.ndarray, language: str = None) -> Optional[TranscriptionResult]:
+            device = device_raw
+        compute_type = "float16" if device == "cuda" else "int8"
+        model_dir = cfg.get_whisper_model_dir() or None
+        logger.info(f"Loading Whisper model: {model_size} on {device}")
+        _model = WhisperModel(
+            model_size,
+            device=device,
+            compute_type=compute_type,
+            download_root=model_dir,
+        )
+        _model_loaded = True
+        logger.info("Whisper model loaded successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to load Whisper model: {e}")
+        return False
+
+
+def _ensure_model_loaded() -> bool:
+    """确保模型已加载（线程安全）"""
+    if not _model_loaded:
+        return _load_model()
+    return True
+
+
+class WhisperService:
+    """语音识别服务 — 基于 faster-whisper"""
+
+    def __init__(self):
+        self._model = None  # 延迟初始化
+        logger.info("WhisperService initialized (lazy model load)")
+
+    def transcribe_audio(self, audio_data: bytes, language: str = "") -> Optional[TranscriptionResult]:
         """
-        Transcribe audio data using faster-whisper
-        
+        转录音频数据
         Args:
-            audio_data: numpy array of audio samples (float32, 16kHz)
-            language: 语言代码 ("zh"/"vi"/"en"/"ja"/"ko"/"th"/None=自动检测)
-            
+            audio_data: PCM 音频数据（int16）
+            language: 语言代码，为空时自动检测
         Returns:
-            TranscriptionResult or None if transcription fails
+            TranscriptionResult 或 None
         """
-        if self.model is None:
-            logger.error("Whisper model not loaded")
-            return None
-        
         try:
-            # Ensure audio data is in the correct format
-            if audio_data.dtype != np.float32:
-                audio_data = audio_data.astype(np.float32)
-            
-            # Resample if necessary (Whisper expects 16kHz)
-            if len(audio_data.shape) > 1:
-                audio_data = audio_data.flatten()
-            
-            # 构建 transcribe 参数：空字符串或 None = 自动检测
-            transcribe_kwargs = dict(
-                beam_size=5,
-                vad_filter=True,
-                vad_parameters=dict(min_silence_duration_ms=500),
-            )
-            if language:
-                transcribe_kwargs["language"] = language
-            
-            # Run transcription in a thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            
-            def transcribe():
-                segments, info = self.model.transcribe(audio_data, **transcribe_kwargs)
-                
-                # Get the first segment (most confident)
-                for segment in segments:
-                    return {
-                        "text": segment.text.strip(),
-                        "language": info.language,
-                        "confidence": segment.avg_logprob
-                    }
-                
+            if not _ensure_model_loaded():
+                logger.error("Whisper model not loaded")
                 return None
-            
-            result = await loop.run_in_executor(None, transcribe)
-            
-            if result:
-                return TranscriptionResult(
-                    text=result["text"],
-                    language=result["language"],
-                    confidence=result["confidence"]
-                )
-            
-            return None
-            
+
+            # int16 PCM → float32
+            audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
+
+            # 使用全局模型实例（避免每次重新加载）
+            global _model
+            if _model is None:
+                logger.error("Whisper model is None after ensure_model_loaded")
+                return None
+
+            segments, info = _model.transcribe(
+                audio_np,
+                language=language or None,
+                beam_size=5,
+                word_timestamps=False,
+                vad_filter=True,
+            )
+
+            text = " ".join([segment.text for segment in segments]).strip()
+            if not text:
+                return None
+
+            return TranscriptionResult(
+                text=text,
+                language=info.language,
+                confidence=info.language_probability,
+            )
         except Exception as e:
-            logger.error(f"Transcription error: {str(e)}")
+            logger.error(f"Transcription error: {e}")
             return None
-    
-    def get_model_info(self):
-        """Get information about the loaded model"""
+
+    def get_service_info(self) -> dict:
+        """获取服务信息"""
         return {
-            "device": self.device,
-            "model_loaded": self.model is not None,
-            "torch_version": torch.__version__,
-            "mps_available": torch.backends.mps.is_available()
+            "model": "faster-whisper",
+            "available": _model_loaded,
         }

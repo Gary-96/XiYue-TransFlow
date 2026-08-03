@@ -48,7 +48,7 @@ function getBackendPaths(): BackendPaths {
   const isDev = !app.isPackaged
 
   if (isDev) {
-    const backendDir = join(__dirname, '..', '..', '..', 'backend')
+    const backendDir = join(process.resourcesPath, '..', '..', 'backend')
     return {
       exe: join(backendDir, 'main_manager.py'),
       cwd: backendDir,
@@ -153,8 +153,8 @@ function notifyRenderer(channel: string, data?: unknown): void {
   }
 }
 
-// ── 健康检查 ──────────────────────────────────────────────────
-function checkBackendHealth(): Promise<boolean> {
+// ── 健康检查（支持动态端口）────────────────────────────────────
+async function checkBackendHealth(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket()
     socket.setTimeout(2000)
@@ -170,25 +170,81 @@ function checkBackendHealth(): Promise<boolean> {
       socket.destroy()
       resolve(false)
     })
-    socket.connect(8000, '127.0.0.1')
+    socket.connect(port, '127.0.0.1')
   })
 }
 
+// ── 扫描端口获取实际端口号 ────────────────────────────────────
+async function detectBackendPort(): Promise<number | null> {
+  const config = await getConfigPort()
+  const startPort = config?.server_port ?? 15387
+
+  // 尝试配置端口，最多偏移 10 个端口
+  for (let offset = 0; offset <= 10; offset++) {
+    const port = startPort + offset
+    const healthy = await checkBackendHealth(port)
+    if (healthy) {
+      return port
+    }
+  }
+  return null
+}
+
+// ── 获取配置中的默认端口 ────────────────────────────────────
+async function getConfigPort(): Promise<{ server_port: number } | null> {
+  try {
+    const http = await import('http')
+    return new Promise((resolve) => {
+      const req = http.get('http://127.0.0.1:15387/api/config', (res) => {
+        let data = ''
+        res.on('data', (chunk) => (data += chunk))
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data)
+            resolve(json?.data ?? null)
+          } catch {
+            resolve(null)
+          }
+        })
+      })
+      req.on('error', () => resolve(null))
+      req.setTimeout(2000, () => {
+        req.destroy()
+        resolve(null)
+      })
+    })
+  } catch {
+    return null
+  }
+}
+
 // ── 等待后端就绪 ──────────────────────────────────────────────
+let detectedBackendPort = 15387
+
 async function waitForBackendAndCreateWindow(): Promise<void> {
   // 先创建主窗口显示加载态
   windowManager.createDashboard()
 
+  // 扫描端口
+  const port = await detectBackendPort()
+  if (port) {
+    detectedBackendPort = port
+    writeLog('INFO', `后端端口已检测: ${port}`)
+  } else {
+    writeLog('WARN', '端口扫描失败，使用默认端口 15387')
+  }
+
+  // 尝试连接检测到的端口
   while (healthCheckRetryCount < MAX_HEALTH_RETRIES) {
-    const healthy = await checkBackendHealth()
+    const healthy = await checkBackendHealth(detectedBackendPort)
     if (healthy) {
       writeLog('INFO', `健康检查通过 (第 ${healthCheckRetryCount + 1} 次尝试)`)
-      notifyRenderer('backend:ready')
+      notifyRenderer('backend:ready', { port: detectedBackendPort })
       return
     }
     healthCheckRetryCount++
     writeLog('INFO', `等待中... (${healthCheckRetryCount}/${MAX_HEALTH_RETRIES})`)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await new Promise((resolve) => setTimeout(resolve, 300))
   }
 
   // 超时
@@ -292,6 +348,11 @@ ipcMain.handle('shell:open-external', (_event, url: string) => {
 // 新增：打开日志文件
 ipcMain.handle('backend:open-log', () => {
   shell.openPath(LOG_FILE)
+})
+
+// 新增：获取后端地址（动态端口）
+ipcMain.handle('backend:get-url', () => {
+  return `http://127.0.0.1:${detectedBackendPort}`
 })
 
 // ── 生命周期 ──────────────────────────────────────────────────

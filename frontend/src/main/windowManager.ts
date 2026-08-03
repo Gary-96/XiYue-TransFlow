@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import { join } from 'path'
 
 interface WindowState {
@@ -31,7 +31,7 @@ class WindowManager {
       backgroundColor: '#00000000',
       titleBarStyle: 'hidden',
       webPreferences: {
-        preload: join(__dirname, '..', 'preload', 'index.js'),
+        preload: join(app.isPackaged ? app.getAppPath() : '', 'dist-electron', 'preload', 'index.js'),
         nodeIntegration: false,
         contextIsolation: true
       }
@@ -39,12 +39,13 @@ class WindowManager {
 
     // 开发环境加载 dev server，生产环境加载打包文件
     // 使用 app.isPackaged 判断，避免 NODE_ENV 在打包后仍为 development 导致误开 DevTools
-    const { app } = require('electron')
     if (!app.isPackaged) {
       win.loadURL('http://localhost:5173')
       win.webContents.openDevTools({ mode: 'detach' })
     } else {
-      win.loadFile(join(__dirname, '..', '..', 'dist', 'index.html'))
+      // 生产环境：使用 app.getAppPath() 获取应用路径
+      // dist/ 目录在 app.asar 内，Electron 会自动解析
+      win.loadFile(join(app.getAppPath(), 'dist', 'index.html'))
     }
 
     win.on('closed', () => {

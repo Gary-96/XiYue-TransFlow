@@ -57,6 +57,17 @@ class LanguagePair:
         }
 
 
+# ASR Whisper 语言代码映射
+LANG_MAP = {
+    "zh": "zh",
+    "vi": "vi",
+    "en": "en",
+    "ja": "ja",
+    "ko": "ko",
+    "th": "th",
+}
+
+
 # ── 翻译 Prompt 模板 ────────────────────────────────────────────
 TRANSLATION_PROMPTS = {
     "zh_to_vi": (
@@ -141,15 +152,7 @@ class LanguageManager:
         if self.current_pair.src_lang == "auto":
             return ""  # Whisper 会自动检测
         elif self.current_pair.src_lang in SUPPORTED_LANGUAGES:
-            lang_map = {
-                "zh": "zh",
-                "vi": "vi",
-                "en": "en",
-                "ja": "ja",
-                "ko": "ko",
-                "th": "th",
-            }
-            return lang_map.get(self.current_pair.src_lang, "zh")
+            return LANG_MAP.get(self.current_pair.src_lang, "zh")
         return "zh"
     
     def get_translation_prompt(self, text: str) -> str:

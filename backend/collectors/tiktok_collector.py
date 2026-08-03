@@ -209,7 +209,7 @@ class TikTokCollector(BaseCollector):
             self.is_connected = True
             logger.info(f"Connected to TikTok stream: @{event.unique_id} (room_id: {event.room_id})")
 
-            asyncio.create_task(self.send_message({
+            asyncio.ensure_future(self.send_message({
                 "type": "platform_connected",
                 "host_id": event.unique_id,
                 "room_id": event.room_id,
@@ -222,7 +222,7 @@ class TikTokCollector(BaseCollector):
             self.is_running = False
             logger.info(f"Disconnected from TikTok stream: @{self.current_host_id}")
 
-            asyncio.create_task(self.send_message({
+            asyncio.ensure_future(self.send_message({
                 "type": "platform_disconnected",
                 "host_id": self.current_host_id,
                 "message": f"Disconnected from TikTok stream: @{self.current_host_id}"
@@ -262,7 +262,7 @@ class TikTokCollector(BaseCollector):
             self.is_connected = False
             self.is_running = False
 
-            asyncio.create_task(self.send_message({
+            asyncio.ensure_future(self.send_message({
                 "type": "live_ended",
                 "host_id": self.current_host_id,
                 "message": f"Live stream ended for @{self.current_host_id}"

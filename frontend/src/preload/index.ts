@@ -14,6 +14,15 @@ const electronAPI = {
   on: (channel: string, callback: (...args: unknown[]) => void) => {
     ipcRenderer.on(channel, (_event, ...args) => callback(...args))
   },
+  removeListener: (channel: string, callback: (...args: unknown[]) => void) => {
+    ipcRenderer.removeListener(channel, callback)
+  },
+
+  // 获取后端地址
+  getBackendUrl: (): string => {
+    // 生产环境下可以从环境变量或 Electron IPC 获取
+    return import.meta.env.VITE_API_BASE_URL?.replace(/^http:/, 'http:') || 'http://127.0.0.1:15387'
+  },
 
   // 打开后端日志文件
   openBackendLog: () => ipcRenderer.invoke('backend:open-log'),

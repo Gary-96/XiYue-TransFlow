@@ -35,7 +35,8 @@
   },
   "asar": true,
   "asarUnpack": [
-    "dist-electron/**/*"
+    "dist-electron/**/*",
+    "dist/**/*"
   ],
   "publish": [
     {

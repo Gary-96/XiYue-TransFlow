@@ -177,13 +177,11 @@ class DouyinLiveConnection:
             frame = Live_pb2.LiveResponse()
             frame.ParseFromString(res)
 
-            # 动态获取浏览器 UA 版本，避免指纹校验失败
+            # 动态获取屏幕分辨率和浏览器 UA，避免指纹校验失败
+            sw, sh = _get_screen_resolution()
             ua = HeaderBuilder.ua
-            browser_ver = (
-                ua.split("Mozilla/")[-1] if "Mozilla/" in ua else "5.0"
-            )
+            browser_ver = ua.split("Mozilla/")[-1] if "Mozilla/" in ua else "5.0"
 
-            # Build WebSocket URL with all required params
             params = (
                 Params()
                 .add_param("app_name", "douyin_web")
@@ -193,8 +191,8 @@ class DouyinLiveConnection:
                 .add_param("compress", "gzip")
                 .add_param("device_platform", "web")
                 .add_param("cookie_enabled", "true")
-                .add_param("screen_width", "1707")
-                .add_param("screen_height", "960")
+                .add_param("screen_width", str(sw))
+                .add_param("screen_height", str(sh))
                 .add_param("browser_language", "zh-CN")
                 .add_param("browser_platform", "Win32")
                 .add_param("browser_name", "Mozilla")
@@ -277,13 +275,7 @@ class DouyinCollector(BaseCollector):
         self._should_reconnect = True
         self._reconnect_count = 0
         self._connection_task: Optional[asyncio.Task] = None
-
-        # 核心：保存启动时的事件循环，确保跨线程安全推送 WebSocket 消息
-        try:
-            self.loop = asyncio.get_event_loop()
-        except RuntimeError:
-            self.loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self.loop)
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
 
         # Stats
         self.stats.update({
@@ -323,6 +315,8 @@ class DouyinCollector(BaseCollector):
     async def start(self, identifier: str, **kwargs) -> bool:
         """Start collecting from Douyin room"""
         try:
+            # 在异步上下文中动态获取事件循环（线程安全）
+            self.loop = asyncio.get_running_loop()
             if self.is_running:
                 logger.warning("Douyin collector already running")
                 return False

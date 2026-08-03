@@ -1,159 +1,139 @@
 """
-乐曼同传 Leman Translate — 翻译服务
-基于 ConfigManager + LanguageManager 动态读取 API Key 与语言对，支持多服务商切换
+乐曼同传 Leman Translate - 翻译后端
+参考 Voicebox 架构，实现多翻译引擎
 """
 import asyncio
 import logging
-from typing import Optional
-from app.models.schemas import TranslationResult, TranslationRequest
+from typing import Optional, Dict, Any
+
+from app.core.base import TranslatorBackend
 from config_manager import get_config_manager
-from app.services.language_manager import language_manager
 
 logger = logging.getLogger(__name__)
 
 
-class TranslationService:
-    """翻译服务 — 根据 ConfigManager 配置 + LanguageManager 语言对动态选择服务商"""
-
+class BaseTranslator(TranslatorBackend):
+    """翻译后端基类"""
+    
+    name = "base_translator"
+    _config = None
+    
     def __init__(self):
+        super().__init__()
         self._config = get_config_manager()
-        self._lang_manager = language_manager
-        self._gemini_model = None  # 延迟初始化
-        logger.info("TranslationService initialized (config-driven)")
+    
+    def get_api_key(self, provider: str) -> str:
+        """获取指定提供商的 API Key"""
+        return self._config.get_api_key(provider)
+    
+    def get_endpoint(self, provider: str) -> str:
+        """获取指定提供商的端点"""
+        return self._config.get_endpoint(provider)
+    
+    def get_model(self, provider: str) -> str:
+        """获取指定提供商的模型"""
+        return self._config.get_model(provider)
+    
+    def is_available(self) -> bool:
+        """检查是否可用"""
+        api_key = self.get_api_key(self.name)
+        return bool(api_key)
+    
+    def get_name(self) -> str:
+        """获取名称"""
+        return self.name
 
-    def _ensure_gemini_model(self):
-        """延迟初始化 Gemini 模型（只在选中 gemini 时）"""
-        if self._gemini_model is not None:
+
+class GeminiTranslator(BaseTranslator):
+    """Google Gemini 翻译"""
+    
+    name = "gemini"
+    _model = None
+    
+    def __init__(self):
+        super().__init__()
+        self._model = None
+    
+    def _ensure_model(self) -> bool:
+        """延迟初始化 Gemini 模型"""
+        if self._model is not None:
             return True
-
-        api_key = self._config.get_api_key("gemini")
+        
+        api_key = self.get_api_key("gemini")
         if not api_key:
             logger.warning("Gemini API Key not configured")
             return False
-
+        
         try:
             import google.generativeai as genai
             genai.configure(api_key=api_key)
-            model_name = self._config.get_model("gemini") or "gemini-1.5-flash"
-            self._gemini_model = genai.GenerativeModel(model_name)
+            model_name = self.get_model("gemini") or "gemini-1.5-flash"
+            self._model = genai.GenerativeModel(model_name)
             logger.info(f"Gemini model initialized: {model_name}")
             return True
         except Exception as e:
             logger.error(f"Failed to init Gemini model: {e}")
             return False
-
-    def _reset_gemini(self):
-        """重置 Gemini 模型（API Key 变更后调用）"""
-        self._gemini_model = None
-
-    async def translate_to_vietnamese(self, text: str, source_language: str = "zh") -> Optional[TranslationResult]:
-        """
-        将文本翻译为越南语（自动使用当前配置的服务商）
-        注意：此方法用于旧版兼容，优先使用带语言对的 translate()
-        """
-        if not text or not text.strip():
+    
+    def reset(self):
+        """重置模型（API Key 变更后调用）"""
+        self._model = None
+    
+    async def translate(self, text: str, source_lang: str, target_lang: str) -> Optional[str]:
+        """执行翻译"""
+        if not self._ensure_model():
             return None
-
-        provider = self._config.get_current_provider()
-        api_key = self._config.get_api_key(provider)
-
-        if not api_key:
-            logger.error(f"No API Key configured for provider: {provider}")
-            return None
-
-        try:
-            lang_pair = self._lang_manager.get_current_pair()
-            target_lang = lang_pair.tgt_lang
-            # Map language code to target language name
-            lang_map = {"vi": "越南语", "en": "英语", "ja": "日语", "ko": "韩语", "th": "泰语"}
-            target_name = lang_map.get(target_lang, target_lang)
-            return await self._translate_by_provider(provider, api_key, text, source_language, target_name)
-        except Exception as e:
-            logger.error(f"Translation error: {e}")
-            return None
-
-    async def translate(self, request: TranslationRequest) -> Optional[TranslationResult]:
-        """通用翻译方法"""
-        if not request.text or not request.text.strip():
-            return None
-
-        provider = self._config.get_current_provider()
-        api_key = self._config.get_api_key(provider)
-
-        if not api_key:
-            logger.error(f"No API Key configured for provider: {provider}")
-            return None
-
-        try:
-            return await self._translate_by_provider(
-                provider, api_key,
-                request.text,
-                request.source_language,
-                request.target_language,
-            )
-        except Exception as e:
-            logger.error(f"Translation error: {e}")
-            return None
-
-    async def _translate_by_provider(
-        self, provider: str, api_key: str,
-        text: str, source_lang: str, target_lang: str
-    ) -> Optional[TranslationResult]:
-        """根据提供商执行翻译"""
-        if provider == "gemini":
-            return await self._translate_gemini(text, source_lang, target_lang)
-        elif provider in ("groq", "deepseek", "openai"):
-            endpoint = self._config.get_endpoint(provider)
-            model = self._config.get_model(provider)
-            return await self._translate_openai_compatible(
-                provider, api_key, endpoint, model, text, source_lang, target_lang
-            )
-        else:
-            logger.error(f"Unknown provider: {provider}")
-            return None
-
-    # ── Gemini ──────────────────────────────────────────
-
-    async def _translate_gemini(
-        self, text: str, source_lang: str, target_lang: str
-    ) -> Optional[TranslationResult]:
-        if not self._ensure_gemini_model():
-            return None
-
+        
         prompt = self._build_prompt(text, source_lang, target_lang)
-        loop = asyncio.get_event_loop()
-
+        loop = asyncio.get_running_loop()
+        
         def do_translate():
-            response = self._gemini_model.generate_content(prompt)
+            response = self._model.generate_content(prompt)
             return response.text.strip()
-
-        translated = await loop.run_in_executor(None, do_translate)
-
-        if translated:
-            return TranslationResult(
-                text=translated,
-                source_language=source_lang,
-                target_language=target_lang,
-                direction=f"{source_lang}_to_{target_lang}"
-            )
-        return None
-
-    # ── OpenAI 兼容（Groq / DeepSeek / OpenAI）────────
-
-    async def _translate_openai_compatible(
-        self, provider: str, api_key: str, endpoint: str, model: str,
-        text: str, source_lang: str, target_lang: str
-    ) -> Optional[TranslationResult]:
+        
         try:
-            import aiohttp
-        except ImportError:
-            logger.error("aiohttp not installed")
+            translated = await loop.run_in_executor(None, do_translate)
+            return translated if translated else None
+        except Exception as e:
+            logger.error(f"Gemini translation error: {e}")
             return None
+    
+    @staticmethod
+    def _build_prompt(text: str, source_lang: str, target_lang: str) -> str:
+        """构建翻译 prompt"""
+        lang_map = {
+            "zh": "中文", "vi": "越南语", "en": "英语",
+            "ja": "日语", "ko": "韩语", "th": "泰语",
+        }
+        source_name = lang_map.get(source_lang, source_lang)
+        target_name = lang_map.get(target_lang, target_lang)
+        return f"请将以下{source_name}翻译成{target_name}，只返回翻译结果，不要添加任何解释：\n\n{text}"
+    
+    def get_name(self) -> str:
+        return "Google Gemini"
 
-        if not endpoint or not model:
-            logger.error(f"Missing endpoint or model for {provider}")
+
+class OpenAICompatibleTranslator(BaseTranslator):
+    """OpenAI 兼容翻译（Groq/DeepSeek/OpenAI）"""
+    
+    def __init__(self, provider: str):
+        self._provider = provider
+        super().__init__()
+    
+    @property
+    def name(self) -> str:
+        return self._provider
+    
+    async def translate(self, text: str, source_lang: str, target_lang: str) -> Optional[str]:
+        """执行翻译"""
+        api_key = self.get_api_key(self._provider)
+        endpoint = self.get_endpoint(self._provider)
+        model = self.get_model(self._provider)
+        
+        if not api_key or not endpoint or not model:
+            logger.error(f"Missing config for {self._provider}")
             return None
-
+        
         prompt = self._build_prompt(text, source_lang, target_lang)
         url = f"{endpoint.rstrip('/')}/chat/completions"
         headers = {
@@ -165,77 +145,99 @@ class TranslationService:
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": 512,
             "temperature": 0.3,
-            "stream": False
         }
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                url, headers=headers, json=payload,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    logger.error(f"{provider} translation failed ({resp.status}): {body[:200]}")
-                    return None
-
-                data = await resp.json()
-                translated = data["choices"][0]["message"]["content"].strip()
-
-                if translated:
-                    return TranslationResult(
-                        text=translated,
-                        source_language=source_lang,
-                        target_language=target_lang,
-                        direction=f"{source_lang}_to_{target_lang}"
-                    )
-        return None
-
-    # ── 辅助 ────────────────────────────────────────────
-
+        
+        try:
+            import aiohttp
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url, headers=headers, json=payload,
+                    timeout=aiohttp.ClientTimeout(total=30)
+                ) as resp:
+                    if resp.status != 200:
+                        body = await resp.text()
+                        logger.error(f"{self._provider} translation failed ({resp.status}): {body[:200]}")
+                        return None
+                    
+                    data = await resp.json()
+                    translated = data["choices"][0]["message"]["content"].strip()
+                    return translated if translated else None
+        except Exception as e:
+            logger.error(f"{self._provider} translation error: {e}")
+            return None
+    
     @staticmethod
     def _build_prompt(text: str, source_lang: str, target_lang: str) -> str:
-        """构建翻译 prompt — 优先从 LanguageManager 获取直播间专用 prompt"""
-        # LanguageManager 中有按 src→tgt 预置的直播间专用 prompt
-        src_short, tgt_short = source_lang.lower(), target_lang.lower()
-        # Map full codes to short codes
-        lang_short_map = {
-            "zh-CN": "zh", "zh": "zh",
-            "vi-VN": "vi", "vi": "vi",
-            "en-US": "en", "en": "en",
-            "ja-JP": "ja", "ja": "ja",
-            "ko-KR": "ko", "ko": "ko",
-            "th-TH": "th", "th": "th",
-        }
-        src_s = lang_short_map.get(src_short, src_short[:2])
-        tgt_s = lang_short_map.get(tgt_short, tgt_short[:2])
-
-        key = f"{src_s}_to_{tgt_s}"
+        """构建翻译 prompt"""
         from app.services.language_manager import TRANSLATION_PROMPTS
-
+        src_s, tgt_s = source_lang.lower(), target_lang.lower()
+        key = f"{src_s}_to_{tgt_s}"
+        
         if key in TRANSLATION_PROMPTS:
             return TRANSLATION_PROMPTS[key].format(text=text)
-
-        # Fallback: 通用翻译指令
+        
+        # Fallback
         lang_map = {"zh": "中文", "vi": "越南语", "en": "英语", "ja": "日语", "ko": "韩语", "th": "泰语"}
         source_name = lang_map.get(src_s, src_s)
         target_name = lang_map.get(tgt_s, tgt_s)
-
         return f"请将以下{source_name}翻译成{target_name}，只返回翻译结果，不要添加任何解释：\n\n{text}"
+    
+    def get_name(self) -> str:
+        from config_manager import PROVIDER_META
+        return PROVIDER_META.get(self._provider, {}).get("label_zh", self._provider)
 
-    def get_service_info(self):
-        """获取翻译服务信息"""
-        provider = self._config.get_current_provider()
-        api_key = self._config.get_api_key(provider)
-        return {
-            "provider": provider,
-            "model": self._config.get_model(provider),
-            "endpoint": self._config.get_endpoint(provider),
-            "api_key_configured": bool(api_key),
-            "supported_languages": ["zh", "vi", "en", "ja", "ko", "th"],
+
+# ── 翻译服务工厂 ──────────────────────────────────────────────
+class TranslationService:
+    """翻译服务 - 根据配置动态选择后端"""
+    
+    def __init__(self):
+        self._config = get_config_manager()
+        self._backends = {
+            "gemini": GeminiTranslator(),
+            "groq": OpenAICompatibleTranslator("groq"),
+            "deepseek": OpenAICompatibleTranslator("deepseek"),
+            "openai": OpenAICompatibleTranslator("openai"),
         }
-
+        logger.info("TranslationService initialized")
+    
+    def _get_backend(self) -> BaseTranslator:
+        """根据配置获取当前翻译后端"""
+        provider = self._config.get_current_provider()
+        return self._backends.get(provider, self._backends["gemini"])
+    
+    async def translate(
+        self,
+        text: str,
+        source_lang: str,
+        target_lang: str,
+    ) -> Optional[str]:
+        """执行翻译"""
+        if not text or not text.strip():
+            return None
+        
+        backend = self._get_backend()
+        if not backend.is_available():
+            logger.error(f"Translation backend {backend.name} not available")
+            return None
+        
+        return await backend.translate(text, source_lang, target_lang)
+    
     def reload_config(self):
         """配置变更后重新加载（重置 Gemini 缓存）"""
-        self._config._load()
-        self._reset_gemini()
+        if "gemini" in self._backends:
+            self._backends["gemini"].reset()
         logger.info("TranslationService config reloaded")
+    
+    def get_info(self) -> Dict[str, Any]:
+        """获取翻译服务信息"""
+        provider = self._config.get_current_provider()
+        backend = self._get_backend()
+        return {
+            "provider": provider,
+            "backend_name": backend.get_name(),
+            "model": self._config.get_model(provider),
+            "endpoint": self._config.get_endpoint(provider),
+            "api_key_configured": bool(self._config.get_api_key(provider)),
+            "available_providers": list(self._backends.keys()),
+        }

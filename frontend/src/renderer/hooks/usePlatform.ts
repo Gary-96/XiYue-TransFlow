@@ -2,25 +2,8 @@
  * 平台控制 Hook — 调用后端 REST API
  */
 import { useState, useCallback } from 'react'
-
-const API_BASE = 'http://localhost:8000'
-
-interface PlatformStatus {
-  active_platform: string | null
-  global_stats: {
-    total_platforms: number
-    active_platform: string | null
-    total_messages: number
-    total_errors: number
-    switch_count: number
-  }
-  platforms: Record<string, {
-    stats: Record<string, number | boolean>
-    is_active: boolean
-    available: boolean
-  }>
-  available_platforms: string[]
-}
+import { API_BASE } from '../services/api'
+import type { PlatformStatus } from '../types'
 
 export function usePlatform() {
   const [status, setStatus] = useState<PlatformStatus | null>(null)

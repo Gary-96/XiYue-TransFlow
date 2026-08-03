@@ -8,7 +8,10 @@ from contextlib import asynccontextmanager
 import json
 import logging
 import numpy as np
-from typing import Dict, Any, Optional
+import time as _time
+from collections import deque
+from datetime import datetime, timezone
+from typing import Deque, Dict, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,9 +20,21 @@ from app.services.whisper_service import WhisperService
 from app.services.translation_service import TranslationService
 from app.services.language_manager import language_manager, SUPPORTED_LANGUAGES
 from app.services.tts_service import tts_service, DEFAULT_VOICES
+from app.services.call_translation_service import call_translation_service, CallMode
+from app.services.llm_service import get_local_llm_manager, LocalModel
 from collectors.manager import create_collector_manager
 from config_manager import get_config_manager, get_config_path, PROVIDER_META
-from audio_device_manager import list_input_devices, get_device_info, validate_device
+from audio_device_manager import list_input_devices, list_output_devices, list_all_devices, get_device_info, validate_device
+
+# Shared language code mapping used by both message_callback and audio WS handler
+LANG_MAP = {
+    "zh": "zh",
+    "vi": "vi",
+    "en": "en",
+    "ja": "ja",
+    "ko": "ko",
+    "th": "th",
+}
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,8 +48,73 @@ whisper_service = WhisperService()
 translation_service = TranslationService()
 
 # Global collector manager & WebSocket clients
-collector_manager = None
 websocket_clients = set()
+collector_manager = None
+
+# 通话同传服务注入依赖
+call_translation_service.whisper_service = whisper_service
+call_translation_service.translation_service = translation_service
+call_translation_service.tts_service = tts_service
+call_translation_service.language_manager = language_manager
+call_translation_service.websocket_clients = websocket_clients
+
+# ── 日志面板服务 ──────────────────────────────────────────────
+LOG_BUFFER_SIZE = 2000
+_log_buffer: Deque[dict] = deque(maxlen=LOG_BUFFER_SIZE)
+_log_ws_clients: set = set()
+
+
+class LogBufferHandler(logging.Handler):
+    """将 Python logger 输出同时写入环形缓冲区，供 WebSocket 推送"""
+
+    def emit(self, record: logging.LogRecord):
+        try:
+            entry = {
+                "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+                "level": record.levelname,
+                "logger": record.name,
+                "message": self.format(record),
+            }
+            _log_buffer.append(entry)
+            loop = asyncio.get_running_loop()
+            loop.call_soon_threadsafe(
+                asyncio.ensure_future, _broadcast_log_entry(entry)
+            )
+        except Exception:
+            pass
+
+
+async def _broadcast_log_entry(entry: dict):
+    """广播单条日志到日志 WebSocket 客户端"""
+    global _log_ws_clients
+    if not _log_ws_clients:
+        return
+    payload = json.dumps(entry, ensure_ascii=False)
+    disconnected = set()
+    for ws in list(_log_ws_clients):
+        try:
+            await ws.send_text(payload)
+        except Exception:
+            disconnected.add(ws)
+    _log_ws_clients -= disconnected
+
+
+_log_buffer_handler = LogBufferHandler()
+logging.getLogger().addHandler(_log_buffer_handler)
+for _name in ("main_manager", "app.services", "collectors", "config_manager",
+              "audio_device_manager", "call_translation_service"):
+    logging.getLogger(_name).addHandler(_log_buffer_handler)
+
+
+def get_log_history() -> list[dict]:
+    return list(_log_buffer)
+
+
+# TTS 旁白播报状态
+_tts_enabled = True  # 默认开启自动播报
+_tts_speaking = False
+_tts_text_queue: list = []
+_tts_speak_task: Optional[asyncio.Task] = None
 
 
 # ── 消息回调函数 (仅负责翻译，不重复广播) ──────────────────────
@@ -52,16 +132,8 @@ async def message_callback(message: dict):
 
                 # 如果源语言 != 目标语言，且不是 auto，进行翻译
                 if src_lang != tgt_lang and src_lang != "auto":
-                    lang_map = {
-                        "zh": "zh",
-                        "vi": "vi",
-                        "en": "en",
-                        "ja": "ja",
-                        "ko": "ko",
-                        "th": "th",
-                    }
-                    src_full = lang_map.get(src_lang, src_lang)
-                    tgt_full = lang_map.get(tgt_lang, tgt_lang)
+                    src_full = LANG_MAP.get(src_lang, src_lang)
+                    tgt_full = LANG_MAP.get(tgt_lang, tgt_lang)
 
                     translation = (
                         await translation_service._translate_by_provider(
@@ -106,6 +178,59 @@ def initialize_collector_manager():
         return False
 
 
+# ── TTS 旁白播报核心逻辑 ─────────────────────────────────────
+async def _queue_tts_speak(text: str, lang: str):
+    """将翻译文本加入播报队列，后台异步合成并广播"""
+    global _tts_speak_task
+    _tts_text_queue.append({"text": text, "lang": lang})
+    if not _tts_speak_task or _tts_speak_task.done():
+        _tts_speak_task = asyncio.get_running_loop().create_task(_tts_speaker_loop())
+
+
+async def _tts_speaker_loop():
+    """后台 TTS 播报循环：逐条合成音频并广播给所有客户端"""
+    global _tts_speaking, _tts_speak_task
+    while _tts_text_queue:
+        _tts_speaking = True
+        await _broadcast_to_all_clients({
+            "type": "tts_status",
+            "speaking": True,
+            "text": _tts_text_queue[0]["text"],
+        })
+        item = _tts_text_queue.pop(0)
+        try:
+            from edge_tts import Communicate
+            edge_voice = tts_service.get_edge_tts_voice()
+            rate = tts_service.get_edge_tts_rate()
+            communicate = Communicate(item["text"], edge_voice, rate=rate)
+            chunks = bytearray()
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    chunks.extend(chunk["data"])
+            audio_bytes = bytes(chunks)
+            if audio_bytes:
+                disconnected = set()
+                for ws in websocket_clients:
+                    try:
+                        await ws.send_bytes(audio_bytes)
+                        await ws.send_text(json.dumps({
+                            "type": "tts_audio_start",
+                            "text": item["text"],
+                            "timestamp": _time.monotonic(),
+                        }, ensure_ascii=False))
+                    except Exception:
+                        disconnected.add(ws)
+                for ws in disconnected:
+                    websocket_clients.discard(ws)
+                logger.info(f"TTS 播报完成: {item['text'][:30]}...")
+        except Exception as e:
+            logger.error(f"TTS 播报失败: {e}")
+        _tts_speaking = False
+    _tts_speak_task = None
+    if not _tts_text_queue:
+        await _broadcast_to_all_clients({"type": "tts_status", "speaking": False})
+
+
 # ── 应用生命周期管理 ──────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -113,7 +238,7 @@ async def lifespan(app: FastAPI):
     logger.info("Starting up 乐曼同传 Leman Translate...")
     manager_available = initialize_collector_manager()
     logger.info("Startup completed")
-    logger.info(f"Whisper device: {whisper_service.device}")
+    logger.info(f"Whisper device: {whisper_service.model if hasattr(whisper_service, 'model') else 'default'}")
     logger.info(f"Collector manager available: {manager_available}")
 
     yield
@@ -156,6 +281,39 @@ async def get_audio_devices():
         return {"status": "error", "message": str(e), "devices": []}
 
 
+@app.get("/api/audio/devices/output")
+async def get_output_devices():
+    """枚举系统中所有音频输出设备"""
+    try:
+        devices = list_output_devices()
+        return {
+            "status": "success",
+            "devices": devices,
+            "count": len(devices),
+        }
+    except Exception as e:
+        logger.error(f"Error listing output devices: {str(e)}")
+        return {"status": "error", "message": str(e), "devices": []}
+
+
+@app.get("/api/audio/devices/all")
+async def get_all_devices():
+    """枚举所有输入和输出设备"""
+    try:
+        result = list_all_devices()
+        return {
+            "status": "success",
+            "inputs": result["inputs"],
+            "outputs": result["outputs"],
+            "input_count": len(result["inputs"]),
+            "output_count": len(result["outputs"]),
+            "current_devices": config_manager.get_audio_devices(),
+        }
+    except Exception as e:
+        logger.error(f"Error listing all devices: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+
 @app.get("/api/audio/devices/{device_id}")
 async def get_audio_device_detail(device_id: int):
     """获取单个音频设备详情"""
@@ -183,7 +341,7 @@ async def validate_audio_device(device_id: int):
 
 @app.put("/api/audio/device")
 async def set_audio_device(request: dict):
-    """设置当前音频输入设备"""
+    """设置当前音频输入设备（兼容旧版接口）"""
     try:
         device_id = request.get("device_id")
 
@@ -220,6 +378,89 @@ async def set_audio_device(request: dict):
         return {"status": "error", "message": str(e)}
 
 
+# ── 4 路独立音频设备路由 ───────────────────────────────────
+@app.put("/api/audio/devices/route")
+async def set_audio_device_route(request: dict):
+    """设置指定路由的音频设备 (mic_input / translation_output / remote_input / remote_output)"""
+    try:
+        device_key = request.get("device_key", "")
+        device_id = request.get("device_id")
+
+        valid_keys = {"mic_input", "translation_output", "remote_input", "remote_output"}
+        if device_key not in valid_keys:
+            return {"status": "error", "message": f"无效的设备路由 key: {device_key}"}
+
+        # 校验设备是否存在
+        if device_id is not None:
+            info = get_device_info(int(device_id))
+            if not info:
+                return {"status": "error", "message": f"设备 {device_id} 不存在"}
+
+            # 输入路由校验输入通道，输出路由校验输出通道
+            if device_key in ("mic_input", "remote_input"):
+                if info.get("max_input_channels", 0) <= 0:
+                    return {"status": "error", "message": f"设备 {info['name']} 没有输入通道"}
+            else:  # translation_output, remote_output
+                if info.get("max_output_channels", 0) <= 0:
+                    return {"status": "error", "message": f"设备 {info['name']} 没有输出通道"}
+
+            device_id = int(device_id)
+
+        success = config_manager.set_audio_device(device_key, device_id)
+        if success:
+            label_map = {
+                "mic_input": "麦克风输入",
+                "translation_output": "主播翻译输出",
+                "remote_input": "对方声音输入",
+                "remote_output": "对方翻译输出",
+            }
+            dev_name = "系统默认设备"
+            if device_id is not None:
+                info = get_device_info(device_id)
+                dev_name = info["name"] if info else f"设备 {device_id}"
+
+            return {
+                "status": "success",
+                "message": f"{label_map.get(device_key, device_key)} 已切换到: {dev_name}",
+                "device_key": device_key,
+                "device_id": device_id,
+                "audio_devices": config_manager.get_audio_devices(),
+            }
+        else:
+            return {"status": "error", "message": "保存配置失败"}
+    except Exception as e:
+        logger.error(f"Error setting audio device route: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/audio/devices/config")
+async def get_audio_devices_config():
+    """获取当前 4 路音频设备配置及详细信息"""
+    try:
+        audio_devices = config_manager.get_audio_devices()
+        result = {}
+        for key, dev_id in audio_devices.items():
+            if dev_id is not None:
+                info = get_device_info(dev_id)
+                result[key] = {
+                    "device_id": dev_id,
+                    "device": info,
+                }
+            else:
+                result[key] = {
+                    "device_id": None,
+                    "device": None,
+                }
+        return {
+            "status": "success",
+            "audio_devices": audio_devices,
+            "details": result,
+        }
+    except Exception as e:
+        logger.error(f"Error getting audio devices config: {str(e)}")
+        return {"status": "error", "message": str(e)}
+
+
 @app.get("/api/audio/current-device")
 async def get_current_audio_device():
     """获取当前配置的音频输入设备"""
@@ -232,12 +473,14 @@ async def get_current_audio_device():
                     "status": "success",
                     "device_id": device_id,
                     "device": info,
+                    "audio_devices": config_manager.get_audio_devices(),
                 }
             else:
                 return {
                     "status": "success",
                     "device_id": device_id,
                     "device": None,
+                    "audio_devices": config_manager.get_audio_devices(),
                     "message": "设备可能已断开",
                 }
         else:
@@ -245,6 +488,7 @@ async def get_current_audio_device():
                 "status": "success",
                 "device_id": None,
                 "device": None,
+                "audio_devices": config_manager.get_audio_devices(),
                 "message": "使用系统默认设备",
             }
     except Exception as e:
@@ -314,14 +558,26 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "device": str(whisper_service.device),
-        "collector_manager_available": collector_manager is not None,
-        "platform_state": (
-            collector_manager.get_platform_status() if collector_manager else None
-        ),
-    }
+    try:
+        device_info = getattr(whisper_service, 'model', 'not_loaded')
+        return {
+            "status": "healthy",
+            "port": _actual_server_port,
+            "device": str(device_info),
+            "collector_manager_available": collector_manager is not None,
+            "platform_state": (
+                collector_manager.get_platform_status() if collector_manager else None
+            ),
+        }
+    except Exception as e:
+        return {
+            "status": "healthy",
+            "port": _actual_server_port,
+            "device": "error",
+            "error": str(e),
+            "collector_manager_available": False,
+            "platform_state": None,
+        }
 
 
 @app.post("/api/platform/switch")
@@ -437,7 +693,7 @@ async def websocket_stream(websocket: WebSocket):
                     {
                         "type": "connection_established",
                         "platform_status": status,
-                        "timestamp": asyncio.get_event_loop().time(),
+                        "timestamp": asyncio.get_running_loop().time(),
                     },
                     ensure_ascii=False,
                 )
@@ -452,7 +708,7 @@ async def websocket_stream(websocket: WebSocket):
                     json.dumps(
                         {
                             "type": "pong",
-                            "timestamp": asyncio.get_event_loop().time(),
+                            "timestamp": asyncio.get_running_loop().time(),
                         },
                         ensure_ascii=False,
                     )
@@ -466,7 +722,7 @@ async def websocket_stream(websocket: WebSocket):
                             {
                                 "type": "status_update",
                                 "status": status,
-                                "timestamp": asyncio.get_event_loop().time(),
+                                "timestamp": asyncio.get_running_loop().time(),
                             },
                             ensure_ascii=False,
                         )
@@ -488,7 +744,7 @@ async def websocket_stream(websocket: WebSocket):
                             {
                                 "type": "platform_switch_result",
                                 "result": result,
-                                "timestamp": asyncio.get_event_loop().time(),
+                                "timestamp": asyncio.get_running_loop().time(),
                             },
                             ensure_ascii=False,
                         )
@@ -501,7 +757,7 @@ async def websocket_stream(websocket: WebSocket):
                         {
                             "type": "platform_stop_result",
                             "success": success,
-                            "timestamp": asyncio.get_event_loop().time(),
+                            "timestamp": asyncio.get_running_loop().time(),
                         },
                         ensure_ascii=False,
                     )
@@ -586,7 +842,7 @@ async def websocket_audio_stream(websocket: WebSocket):
                     {
                         "type": "audio_spectrum",
                         "data": spectrum_data,
-                        "timestamp": asyncio.get_event_loop().time(),
+                        "timestamp": asyncio.get_running_loop().time(),
                     },
                     ensure_ascii=False,
                 )
@@ -604,16 +860,8 @@ async def websocket_audio_stream(websocket: WebSocket):
                 )
 
                 pair = language_manager.get_current_pair()
-                lang_map = {
-                    "zh": "zh",
-                    "vi": "vi",
-                    "en": "en",
-                    "ja": "ja",
-                    "ko": "ko",
-                    "th": "th",
-                }
-                src_full = lang_map.get(pair.src_lang, pair.src_lang)
-                tgt_full = lang_map.get(pair.tgt_lang, pair.tgt_lang)
+                src_full = LANG_MAP.get(pair.src_lang, pair.src_lang)
+                tgt_full = LANG_MAP.get(pair.tgt_lang, pair.tgt_lang)
 
                 translation = (
                     await translation_service._translate_by_provider(
@@ -646,6 +894,10 @@ async def websocket_audio_stream(websocket: WebSocket):
                 await websocket.send_text(
                     json.dumps(response, ensure_ascii=False)
                 )
+
+                # 自动触发 TTS 旁白播报
+                if _tts_enabled and translation and translation.text:
+                    await _queue_tts_speak(translation.text, tgt_full)
         except Exception as e:
             logger.error(f"Error processing audio: {str(e)}")
             error_response = {"type": "error", "error": str(e)}
@@ -654,10 +906,6 @@ async def websocket_audio_stream(websocket: WebSocket):
             )
 
         audio_buffer.clear()
-
-    import time as _time
-
-    buffer_first_data_time = None
 
     try:
         while True:
@@ -679,7 +927,7 @@ async def websocket_audio_stream(websocket: WebSocket):
                     buffer_timer.cancel()
                     buffer_timer = None
                 buffer_first_data_time = None
-                buffer_timer = asyncio.get_event_loop().create_task(
+                buffer_timer = asyncio.get_running_loop().create_task(
                     process_buffer()
                 )
 
@@ -721,7 +969,7 @@ async def set_voice(request: dict):
         await _broadcast_to_all_clients({
             "type": "voice_changed",
             "voice_id": voice_id,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         })
         return {
             "status": "success",
@@ -765,7 +1013,7 @@ async def set_language(request: dict):
             "type": "language_changed",
             "src_lang": src_lang,
             "tgt_lang": tgt_lang,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         })
         translation_service._reset_gemini()
         return {
@@ -795,7 +1043,7 @@ async def switch_language():
             "type": "language_switched",
             "src_lang": pair.src_lang,
             "tgt_lang": pair.tgt_lang,
-            "timestamp": asyncio.get_event_loop().time(),
+            "timestamp": asyncio.get_running_loop().time(),
         })
         translation_service._reset_gemini()
         return {
@@ -820,6 +1068,181 @@ async def get_sample_rates():
     }
 
 
+# ── TTS 旁白播报路由 ──────────────────────────────────────────
+@app.get("/api/tts/status")
+async def get_tts_status():
+    """获取 TTS 播报状态"""
+    return {
+        "status": "success",
+        "enabled": _tts_enabled,
+        "speaking": _tts_speaking,
+        "queue_size": len(_tts_text_queue),
+    }
+
+
+@app.put("/api/tts/enable")
+async def set_tts_enable(request: dict):
+    """开关 TTS 自动播报"""
+    global _tts_enabled
+    enabled = request.get("enabled", True)
+    _tts_enabled = enabled
+    return {"status": "success", "enabled": _tts_enabled}
+
+
+@app.post("/api/tts/speak")
+async def speak_text(request: dict):
+    """手动触发 TTS 播报"""
+    text = request.get("text", "").strip()
+    if not text:
+        return {"status": "error", "message": "text is required"}
+    lang = request.get("lang", "vi")
+    await _queue_tts_speak(text, lang)
+    return {"status": "success", "queued": True}
+
+
+@app.post("/api/tts/clear-queue")
+async def clear_tts_queue():
+    """清空 TTS 播报队列"""
+    global _tts_text_queue
+    _tts_text_queue.clear()
+    return {"status": "success"}
+
+
+# ── 通话实时同传路由 ──────────────────────────────────────────
+@app.get("/api/call/list-devices")
+async def list_call_devices():
+    """枚举可用于通话同传的音频设备（Loopback + 播放设备）"""
+    return await call_translation_service.list_devices()
+
+
+@app.get("/api/call/status")
+async def get_call_status():
+    """获取通话同传当前状态"""
+    return {"status": "success", **call_translation_service.get_status()}
+
+
+@app.post("/api/call/start")
+async def start_call_translation(request: dict):
+    """
+    启动通话同传
+    Body: {mode: "subtitle_only" | "tts_auto", loopback_device_index: int?, tts_device_index: int?}
+    """
+    mode = request.get("mode", "subtitle_only")
+    loopback_idx = request.get("loopback_device_index")
+    tts_idx = request.get("tts_device_index")
+    return await call_translation_service.start(
+        mode=mode,
+        loopback_device_index=loopback_idx,
+        tts_device_index=tts_idx,
+    )
+
+
+@app.post("/api/call/stop")
+async def stop_call_translation():
+    """停止通话同传"""
+    return await call_translation_service.stop()
+
+
+@app.post("/api/call/reset-stats")
+async def reset_call_stats():
+    """重置通话同传统计计数"""
+    call_translation_service.reset_stats()
+    return {"status": "success"}
+
+
+# ── 日志面板路由 ──────────────────────────────────────────────
+@app.websocket("/ws/logs")
+async def websocket_logs(websocket: WebSocket):
+    """实时日志推送 WebSocket"""
+    await websocket.accept()
+    global _log_ws_clients
+    _log_ws_clients.add(websocket)
+    logger.info(f"Log panel client connected. Total: {len(_log_ws_clients)}")
+    try:
+        # 推送历史日志（最近 200 条）
+        for entry in list(_log_buffer)[-200:]:
+            await websocket.send_text(json.dumps(entry, ensure_ascii=False))
+        # 保持连接
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        logger.info("Log panel client disconnected")
+    except Exception as e:
+        logger.error(f"Log WS error: {e}")
+    finally:
+        _log_ws_clients.discard(websocket)
+
+
+@app.get("/api/logs")
+async def get_logs():
+    """获取历史日志（最近 500 条）"""
+    return {"status": "success", "logs": list(_log_buffer)[-500:]}
+
+
+@app.post("/api/logs/clear")
+async def clear_logs():
+    """清空日志缓冲区"""
+    _log_buffer.clear()
+    return {"status": "success"}
+
+
+# ── 本地大模型路由 ──────────────────────────────────────────
+@app.get("/api/local-llm/status")
+async def get_local_llm_status():
+    """获取本地大模型状态"""
+    mgr = get_local_llm_manager()
+    return {"status": "success", **mgr.get_status()}
+
+
+@app.get("/api/local-llm/models")
+async def list_local_models():
+    """列出本地模型"""
+    mgr = get_local_llm_manager()
+    models = await mgr.list_models()
+    return {"status": "success", "models": [m.to_dict() for m in models]}
+
+
+@app.post("/api/local-llm/pull")
+async def pull_local_model(request: dict):
+    """拉取/下载本地模型"""
+    model_name = request.get("model_name", "").strip()
+    if not model_name:
+        return {"status": "error", "message": "model_name is required"}
+    mgr = get_local_llm_manager()
+    result = await mgr.pull_model(model_name)
+    return {"status": result.get("status", "error"), **result}
+
+
+@app.delete("/api/local-llm/models/{model_name}")
+async def delete_local_model(model_name: str):
+    """删除本地模型"""
+    mgr = get_local_llm_manager()
+    result = await mgr.delete_model(model_name)
+    return {"status": result.get("status", "error"), **result}
+
+
+@app.post("/api/local-llm/chat")
+async def chat_with_local_llm(request: dict):
+    """使用本地模型进行推理"""
+    prompt = request.get("prompt", "").strip()
+    system = request.get("system", "")
+    if not prompt:
+        return {"status": "error", "message": "prompt is required"}
+    mgr = get_local_llm_manager()
+    result = await mgr.chat(prompt, system)
+    return {"status": result.get("status", "error"), **result}
+
+
+@app.put("/api/local-llm/config")
+async def set_local_llm_config(request: dict):
+    """更新本地大模型配置"""
+    mgr = get_local_llm_manager()
+    success = config_manager.set_local_config(request)
+    if success:
+        return {"status": "success"}
+    return {"status": "error", "message": "配置更新失败"}
+
+
 # ── 广播辅助函数 ──────────────────────────────────────────────
 async def _broadcast_to_all_clients(message: dict):
     """向所有 WebSocket 客户端广播控制消息 (如语言/音色切换)"""
@@ -836,7 +1259,45 @@ async def _broadcast_to_all_clients(message: dict):
         websocket_clients.discard(c)
 
 
+# ── 服务器端口 ────────────────────────────────────────────────
+# 运行时检测到的实际端口（可能因冲突自动递增）
+_actual_server_port: int = 15387
+
+
+def _find_free_port(start_port: int, max_attempts: int = 10) -> int:
+    """
+    检测端口是否可用，不可用时自动递增查找空闲端口。
+    返回最终可用的端口号。
+    """
+    import socket
+    port = start_port
+    for _ in range(max_attempts):
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.bind(('', port))
+                s.close()
+                return port
+        except OSError:
+            port += 1
+    logger.warning(f"端口检测失败，回退到 {port}")
+    return port
+
+
+@app.get("/api/server/port")
+async def get_server_port():
+    """获取当前服务器实际使用的端口"""
+    return {"status": "success", "port": _actual_server_port}
+
+
 if __name__ == "__main__":
     import uvicorn
+    from config_manager import get_config_manager as _get_cfg
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    cfg = _get_cfg()
+    start_port = cfg.get_server_port()
+    _actual_server_port = _find_free_port(start_port)
+    if _actual_server_port != start_port:
+        logger.warning(f"端口 {start_port} 被占用，自动切换到 {_actual_server_port}")
+        cfg.set_server_port(_actual_server_port)
+
+    uvicorn.run(app, host="0.0.0.0", port=_actual_server_port)

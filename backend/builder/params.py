@@ -1,5 +1,34 @@
+import ctypes
 from builder.header import HeaderBuilder
 from utils.dy_util import generate_webid, generate_msToken, splice_url, generate_a_bogus, generate_fake_webid
+
+
+def _get_screen_resolution():
+    """动态获取屏幕分辨率，避免硬编码
+    优先使用 screeninfo，降级使用 ctypes（Windows 原生）
+    """
+    # 尝试使用 screeninfo
+    try:
+        import screeninfo
+        monitors = screeninfo.get_monitors()
+        if monitors:
+            primary = max(monitors, key=lambda m: m.is_primary)
+            return primary.width, primary.height
+    except Exception:
+        pass
+
+    # Windows 原生 API
+    try:
+        user32 = ctypes.windll.user32
+        # SM_CXSCREEN = 0, SM_CYSCREEN = 1
+        width = user32.GetSystemMetrics(0)
+        height = user32.GetSystemMetrics(1)
+        if width > 0 and height > 0:
+            return width, height
+    except Exception:
+        pass
+
+    return 1920, 1080  # 默认值
 
 
 class Params:
@@ -7,6 +36,8 @@ class Params:
         self.params = {}
 
     def with_platform(self):
+        # 动态获取屏幕分辨率
+        sw, sh = _get_screen_resolution()
         params = {
             'device_platform': 'webapp',
             'aid': '6383',
@@ -16,8 +47,8 @@ class Params:
             'version_code': '170400',
             'version_name': '17.4.0',
             'cookie_enabled': 'true',
-            'screen_width': '1707',
-            'screen_height': '960',
+            'screen_width': str(sw),
+            'screen_height': str(sh),
             'browser_language': 'zh-CN',
             'browser_platform': 'Win32',
             'browser_name': 'Edge',
