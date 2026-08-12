@@ -1,5 +1,5 @@
 /**
- * 音频设备配置组件
+ * 音频设备配置组件 (Light Theme)
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -21,7 +21,6 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
   const [loadingDevices, setLoadingDevices] = useState(false)
   const [switchingDevice, setSwitchingDevice] = useState<string | null>(null)
 
-  // ── Load Audio Devices ────────────────────────────────
   const loadAudioDevices = useCallback(async () => {
     setLoadingDevices(true)
     try {
@@ -46,7 +45,6 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
 
   useEffect(() => { loadAudioDevices() }, [loadAudioDevices])
 
-  // ── Handlers ──────────────────────────────────────────
   const handleSwitchAudioRoute = async (deviceKey: string, deviceId: number | null) => {
     const setters: Record<string, (id: number | null) => void> = {
       mic_input: setMicInputId,
@@ -90,16 +88,16 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
   }
 
   return (
-    <div className="rounded-xl bg-zinc-950/40 border border-zinc-800/50 p-4 space-y-3">
+    <div className="rounded-xl bg-white border border-slate-200 p-4 space-y-3 shadow-sm">
       <div className="flex items-center justify-between">
-        <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">{t('settings.audioRoute')}</label>
+        <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">{t('settings.audioRoute')}</label>
         <button 
-          className="px-2.5 py-1 rounded-md text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 border border-zinc-700/40 transition-all disabled:opacity-40" 
+          className="px-2.5 py-1 rounded-md text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 border border-slate-200 transition-all disabled:opacity-40" 
           onClick={loadAudioDevices} 
           disabled={loadingDevices} 
           title={t('settings.refreshDevices')}
         >
-          {loadingDevices ? '⏳' : t('settings.refreshDevices')}
+          {loadingDevices ? '⏳' : '🔄'}
         </button>
       </div>
       
@@ -109,10 +107,10 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
         { key: 'remote_input', label: t('settings.remoteInput'), devices: inputDevices },
         { key: 'remote_output', label: t('settings.remoteOutput'), devices: outputDevices },
       ].map(({ key, label, devices }) => (
-        <div key={key} className="space-y-1">
-          <label className="text-xs text-zinc-400">{label}</label>
+        <div key={key} className="space-y-1.5">
+          <label className="text-xs text-slate-600">{label}</label>
           <select
-            className="w-full bg-zinc-900/60 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 disabled:opacity-50"
+            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 disabled:opacity-50"
             value={(
               key === 'mic_input' ? micInputId :
               key === 'translation_output' ? translationOutputId :
@@ -138,7 +136,7 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
       ))}
       
       {(inputDevices.filter(d => d.is_pro_device).length > 0 || outputDevices.filter(d => d.is_pro_device).length > 0) && (
-        <div className="text-xs text-violet-400 bg-violet-500/5 border border-violet-500/15 rounded-md px-3 py-2">
+        <div className="text-xs text-violet-600 bg-violet-50 border border-violet-200 rounded-md px-3 py-2">
           ⭐ {t('settings.proDevicesHint')} {inputDevices.filter(d => d.is_pro_device).length + outputDevices.filter(d => d.is_pro_device).length} {t('settings.professionalDevices')}
         </div>
       )}

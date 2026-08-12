@@ -6,7 +6,7 @@ import asyncio
 import logging
 import re
 import time
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, TYPE_CHECKING
 from enum import Enum
 
 from .base import BaseCollector, CollectorError
@@ -23,6 +23,17 @@ try:
 except ImportError:
     TIKTOK_AVAILABLE = False
     logging.warning("TikTokLive not installed. Install with: pip install TikTokLive")
+    TikTokLiveClient = Any  # type: ignore[assignment]
+    ConnectEvent = Any  # type: ignore[misc]
+    DisconnectEvent = Any  # type: ignore[misc]
+    CommentEvent = Any  # type: ignore[misc]
+    GiftEvent = Any  # type: ignore[misc]
+    LikeEvent = Any  # type: ignore[misc]
+    JoinEvent = Any  # type: ignore[misc]
+    FollowEvent = Any  # type: ignore[misc]
+    ShareEvent = Any  # type: ignore[misc]
+    RoomUserSeqEvent = Any  # type: ignore[misc]
+    LiveEndEvent = Any  # type: ignore[misc]
 
 logger = logging.getLogger(__name__)
 

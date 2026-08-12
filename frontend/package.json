@@ -1,6 +1,5 @@
 {
   "name": "leman-translate",
-  "type": "module",
   "version": "0.1.1",
   "description": "乐曼同传小助手 - 中越直播同声传译工具",
   "main": "dist-electron/main/index.js",
@@ -86,7 +85,8 @@
     },
     "asar": true,
     "asarUnpack": [
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "dist/**/*"
     ],
     "publish": [
       {

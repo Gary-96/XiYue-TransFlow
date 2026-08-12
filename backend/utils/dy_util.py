@@ -15,7 +15,15 @@ requests.packages.urllib3.disable_warnings()
 import subprocess
 from functools import partial
 
-import execjs
+# Try to import execjs (or pyexecjs as fallback)
+try:
+    import execjs
+except ImportError:
+    try:
+        import pyexecjs as execjs  # type: ignore[no-redef]
+    except ImportError:
+        execjs = None  # type: ignore[assignment]
+
 import os
 
 def generate_ree_key(private_key: str) -> str:

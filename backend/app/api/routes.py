@@ -112,6 +112,39 @@ async def set_language(
     return {"status": "success", "src_lang": src_lang, "tgt_lang": tgt_lang}
 
 
+# 前端旧接口兼容（get 别名）
+@language_router.get("/get")
+async def get_language():
+    """获取当前语言设置（前端兼容接口）"""
+    from app.services.language_manager import language_manager as lm
+    pair = lm.get_current_pair()
+    return {
+        "status": "ok",
+        "language": "zh" if pair.src_lang == "zh" else pair.src_lang,
+        "src_lang": pair.src_lang,
+        "tgt_lang": pair.tgt_lang,
+        "src_label": pair.src_label,
+        "tgt_label": pair.tgt_label,
+    }
+
+
+# 前端旧接口兼容（switch 别名）
+@language_router.post("/switch")
+async def switch_language():
+    """切换语言方向（前端兼容接口）"""
+    from app.services.language_manager import language_manager as lm
+    current = lm.get_current_pair()
+    # 交换语言方向
+    new_src = current.tgt_lang
+    new_tgt = current.src_lang
+    lm.set_language_pair(new_src, new_tgt)
+    return {
+        "status": "success",
+        "src_lang": new_src,
+        "tgt_lang": new_tgt,
+    }
+
+
 # ── 配置路由 ─────────────────────────────────────────────────
 config_router = APIRouter(prefix="/api/config", tags=["配置"])
 
@@ -146,11 +179,10 @@ async def get_voices(
 ):
     """获取可用音色列表"""
     voices = tts.get_all_voices()
-    current_id = None  # 可以从 config 获取
     return {
         "status": "success",
         "voices": voices,
-        "current_voice_id": current_id,
+        "current_voice_id": tts.current_voice_id,
     }
 
 
@@ -169,6 +201,141 @@ async def set_voice(
     return {"status": "error", "message": "voice_id required"}
 
 
+@tts_router.get("/status")
+async def get_tts_status(
+    tts = Depends(get_tts_service),
+):
+    """获取 TTS 状态"""
+    return {
+        "status": "ok",
+        "enabled": tts.enabled,
+        "current_voice": tts.current_voice_id,
+    }
+
+
+@tts_router.put("/enable")
+async def enable_tts(
+    request: Dict[str, bool],
+    tts = Depends(get_tts_service),
+):
+    """启用/禁用 TTS"""
+    enabled = request.get("enabled", False)
+    tts.enabled = enabled
+    return {"status": "success", "enabled": enabled}
+
+
+@tts_router.post("/clear-queue")
+async def clear_tts_queue(
+    tts = Depends(get_tts_service),
+):
+    """清除 TTS 队列"""
+    tts.clear_queue()
+    return {"status": "success"}
+
+
+# ── 通话同传路由 ─────────────────────────────────────────────
+call_router = APIRouter(prefix="/api/call", tags=["通话同传"])
+
+
+@call_router.get("/list-devices")
+async def list_call_devices():
+    """获取通话同传设备列表"""
+    try:
+        from app.services.call_translation_service import call_translation_service
+        return {
+            "status": "success",
+            "loopback_devices": call_translation_service.get_loopback_devices(),
+            "tts_devices": call_translation_service.get_tts_devices(),
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@call_router.get("/status")
+async def get_call_status():
+    """获取通话同传状态"""
+    try:
+        from app.services.call_translation_service import call_translation_service
+        return {
+            "status": "success",
+            "is_running": call_translation_service.state.running,
+            "mode": call_translation_service.state.mode.value if call_translation_service.state.mode else "subtitle_only",
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@call_router.post("/start")
+async def start_call_translation(
+    request: Dict[str, Any],
+):
+    """启动通话同传"""
+    try:
+        from app.services.call_translation_service import call_translation_service, CallMode
+        mode = request.get("mode", "subtitle_only")
+        loopback_idx = request.get("loopback_device_index")
+        tts_idx = request.get("tts_device_index")
+        
+        mode_enum = CallMode.TTS_AUTO if mode == "tts_auto" else CallMode.SUBTITLE_ONLY
+        call_translation_service.start(mode=mode_enum, loopback_idx=loopback_idx, tts_idx=tts_idx)
+        return {"status": "started", "mode": mode}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@call_router.post("/stop")
+async def stop_call_translation():
+    """停止通话同传"""
+    try:
+        from app.services.call_translation_service import call_translation_service
+        call_translation_service.stop()
+        return {"status": "stopped"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@call_router.post("/reset-stats")
+async def reset_call_stats():
+    """重置通话同传统计"""
+    try:
+        from app.services.call_translation_service import call_translation_service
+        call_translation_service.reset_stats()
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ── 平台状态路由 ─────────────────────────────────────────────
+platform_router = APIRouter(prefix="/api/platform", tags=["平台"])
+
+
+@platform_router.get("/status")
+async def get_platform_status(
+    config = Depends(get_config_manager),
+):
+    """获取平台连接状态"""
+    try:
+        # 直接创建管理器实例（不再依赖 app.state）
+        from collectors.manager import CollectorManager
+        cm = CollectorManager()
+        status = {}
+        for platform, collector in cm.collectors.items():
+            status[platform] = {
+                "connected": collector.is_connected if hasattr(collector, 'is_connected') else False,
+            }
+        return {
+            "status": "ok",
+            "connected": any(s.get("connected", False) for s in status.values()),
+            "platforms": status,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
+            "connected": False,
+        }
+
+
 # ── 聚合所有路由 ─────────────────────────────────────────────
 def register_routes(app):
     """注册所有路由到 FastAPI 应用"""
@@ -177,4 +344,6 @@ def register_routes(app):
     app.include_router(language_router)
     app.include_router(config_router)
     app.include_router(tts_router)
-    print("✅ API 路由注册完成")
+    app.include_router(call_router)
+    app.include_router(platform_router)
+    print("[OK] API routes registered")

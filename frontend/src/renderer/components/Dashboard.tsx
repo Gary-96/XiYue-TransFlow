@@ -7,10 +7,9 @@ import Sidebar from './Sidebar'
 import DanmakuPanel from './DanmakuPanel'
 import SettingsPanel from './SettingsPanel'
 import AudioSpectrum from './AudioSpectrum'
-import AboutPanel from './AboutPanel'
 
 type Platform = 'tiktok' | 'douyin'
-type ActiveTab = 'danmaku' | 'subtitle' | 'audio' | 'settings' | 'about'
+type ActiveTab = 'danmaku' | 'subtitle' | 'audio' | 'settings'
 
 interface LanguageOption {
   code: string
@@ -18,6 +17,7 @@ interface LanguageOption {
   icon: string
 }
 
+// 安全获取 electronAPI，防止 preload 未加载时崩溃
 const electron = window.electronAPI
 
 export default function Dashboard() {
@@ -54,17 +54,12 @@ export default function Dashboard() {
   const [backendReady, setBackendReady] = useState(false)
   const [backendFailed, setBackendFailed] = useState(false)
   const [backendError, setBackendError] = useState<string>('')
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [backendPort, setBackendPort] = useState<number>(15387)
+  const [backendPort] = useState<number>(15387)
 
   const [appVersion, setAppVersion] = useState<string>('')
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'>('idle')
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [updateVersion, setUpdateVersion] = useState<string>('')
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [downloadProgress, setDownloadProgress] = useState<{ percent: number; speed: string } | null>(null)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [updateError, setUpdateError] = useState<string>('')
+  const [downloadProgress, setDownloadProgress] = useState<{ percent: number; speed: string } | null>(null)
 
   useEffect(() => {
     setSpectrumCallback((data) => setSpectrumData([...data]))
@@ -82,13 +77,13 @@ export default function Dashboard() {
       setBackendFailed(true)
       setBackendError('')
     }
-    electron.on('backend:ready', onReady)
-    electron.on('backend:failed', onFailed)
-    electron.on('backend:crashed', onFailed)
+    electron?.on('backend:ready', onReady)
+    electron?.on('backend:failed', onFailed)
+    electron?.on('backend:crashed', onFailed)
     return () => {
-      electron.removeListener?.('backend:ready', onReady)
-      electron.removeListener?.('backend:failed', onFailed)
-      electron.removeListener?.('backend:crashed', onFailed)
+      electron?.removeListener?.('backend:ready', onReady)
+      electron?.removeListener?.('backend:failed', onFailed)
+      electron?.removeListener?.('backend:crashed', onFailed)
     }
   }, [])
 
@@ -137,7 +132,7 @@ export default function Dashboard() {
   useEffect(() => {
     electron.getAppVersion().then((v: string) => setAppVersion(v))
     const handlers: Array<[string, (info?: unknown) => void]> = [
-      ['update-available', (info) => { const i = info as { version: string } | undefined; setUpdateStatus('available'); setUpdateVersion(i?.version || ''); setUpdateError('') }],
+      ['update-available', (info) => { const i = info as { version: string } | undefined; setUpdateStatus('available'); setUpdateError('') }],
       ['update-not-available', () => { setUpdateStatus('not-available'); setUpdateError('') }],
       ['download-progress', (data) => { const d = data as { percent: number; bytesPerSecond: number }; setUpdateStatus('downloading'); setDownloadProgress({ percent: d.percent, speed: `${(d.bytesPerSecond / 1048576).toFixed(1)} MB/s` }) }],
       ['update-downloaded', () => { setUpdateStatus('downloaded'); setDownloadProgress(null) }],
@@ -151,16 +146,13 @@ export default function Dashboard() {
 
   // ── 更新相关回调 ────────────────────────────────────────
   const handleCheckUpdate = useCallback(async () => {
-    setUpdateStatus('checking'); setUpdateError(''); setUpdateVersion(''); setDownloadProgress(null)
+    setUpdateStatus('checking'); setUpdateError(''); setDownloadProgress(null)
     await electron.checkForUpdate()
   }, [])
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleDownloadUpdate = useCallback(async () => {
     setUpdateStatus('downloading'); setUpdateError('')
     await electron.downloadUpdate()
   }, [])
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleQuitAndInstall = useCallback(async () => { await electron.quitAndInstall() }, [])
 
   // ── 语言 / 平台 / 置顶 ──────────────────────────────────
   const handleSetLanguage = async (src: string, tgt: string) => {
@@ -190,11 +182,11 @@ export default function Dashboard() {
   // ── 加载态 / 失败态 ─────────────────────────────────────
   if (!backendReady && !backendFailed) {
     return (
-      <div className="h-full bg-zinc-950 flex items-center justify-center">
+      <div className="h-full bg-slate-50 flex items-center justify-center">
         <div className="text-center space-y-3">
           <div className="text-5xl animate-pulse">⚡</div>
-          <div className="text-lg font-medium text-amber-400">{t('dashboard.loadingBackend')}</div>
-          <div className="text-sm text-zinc-500">{t('dashboard.firstStart')}</div>
+          <div className="text-lg font-medium text-blue-600">{t('dashboard.loadingBackend')}</div>
+          <div className="text-sm text-slate-400">{t('dashboard.firstStart')}</div>
         </div>
       </div>
     )
@@ -202,14 +194,14 @@ export default function Dashboard() {
 
   if (backendFailed) {
     return (
-      <div className="h-full bg-zinc-950 flex items-center justify-center">
+      <div className="h-full bg-slate-50 flex items-center justify-center">
         <div className="text-center space-y-3 max-w-sm">
           <div className="text-5xl">⚠️</div>
-          <div className="text-lg font-medium text-red-400">{t('dashboard.backendFailed')}</div>
-          <div className="text-sm text-zinc-400 leading-relaxed">{backendError}</div>
+          <div className="text-lg font-medium text-red-600">{t('dashboard.backendFailed')}</div>
+          <div className="text-sm text-slate-500 leading-relaxed">{backendError}</div>
           <button
             onClick={() => electron.openBackendLog?.()}
-            className="px-5 py-2 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-400 text-sm hover:bg-amber-500/20 transition-all"
+            className="px-5 py-2 rounded-lg border border-red-300 bg-red-50 text-red-600 text-sm hover:bg-red-100 transition-all"
           >
             {t('dashboard.viewLog')}
           </button>
@@ -220,25 +212,19 @@ export default function Dashboard() {
 
   // ── 主布局 ─────────────────────────────────────────────
   return (
-    <div className="h-full w-full bg-zinc-950 flex flex-col overflow-hidden relative">
-      {/* 极光背景 */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute w-96 h-96 bg-amber-500/5 rounded-full blur-3xl -top-32 -left-32 animate-pulse" />
-        <div className="absolute w-80 h-80 bg-violet-500/5 rounded-full blur-3xl -bottom-20 -right-20 animate-pulse" style={{ animationDelay: '2s' }} />
-      </div>
-
+    <div className="h-full w-full bg-slate-50 flex flex-col overflow-hidden relative">
       {/* 顶部标题栏 */}
-      <header className="flex items-center justify-end px-4 h-11 bg-zinc-900/90 backdrop-blur-xl border-b border-zinc-800/60 relative z-10 drag-region">
+      <header className="flex items-center justify-end px-4 h-11 bg-white border-b border-slate-200 relative z-10 drag-region">
         <div className="flex gap-1 no-drag-region">
           <button
-            className={`w-7 h-7 flex items-center justify-center rounded-md transition-all text-xs ${isPinned ? 'bg-amber-500/15 text-amber-400' : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'}`}
+            className={`w-7 h-7 flex items-center justify-center rounded-md transition-all text-xs ${isPinned ? 'bg-blue-50 text-blue-600' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-600'}`}
             onClick={handleTogglePin}
             title={t('dashboard.pin')}
           >
             {isPinned ? '📌' : '📍'}
           </button>
-          <button className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-all text-xs" onClick={() => electron.minimize()} title={t('dashboard.minimize')}>—</button>
-          <button className="w-7 h-7 flex items-center justify-center rounded-md text-zinc-400 hover:bg-red-500/20 hover:text-red-400 transition-all text-xs" onClick={() => electron.close()} title={t('dashboard.close')}>✕</button>
+          <button className="w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all text-xs" onClick={() => electron.minimize()} title={t('dashboard.minimize')}>—</button>
+          <button className="w-7 h-7 flex items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all text-xs" onClick={() => electron.close()} title={t('dashboard.close')}>✕</button>
         </div>
       </header>
 
@@ -268,20 +254,20 @@ export default function Dashboard() {
             {activeTab === 'subtitle' && (
               <div className="h-full flex flex-col gap-3 p-4 overflow-hidden">
                 {transcription && (
-                  <div className="rounded-xl bg-zinc-900/60 border border-zinc-800/50 p-4 space-y-2 animate-[slide-in-up_0.3s_ease]">
-                    <div className="text-sm text-zinc-400 line-clamp-2">{transcription.transcription.text}</div>
-                    <div className="text-lg font-bold text-amber-400 glow-text-amber">{transcription.translation.text}</div>
+                  <div className="rounded-xl bg-white border border-slate-200 p-4 space-y-2 shadow-sm animate-[slide-in-up_0.3s_ease]">
+                    <div className="text-sm text-slate-500 line-clamp-2">{transcription.transcription.text}</div>
+                    <div className="text-lg font-bold text-blue-600">{transcription.translation.text}</div>
                   </div>
                 )}
                 <div className="flex-1 overflow-y-auto space-y-2">
                   {history.slice(-20).reverse().map((item, i) => (
-                    <div key={i} className="rounded-lg bg-zinc-900/40 border border-zinc-800/30 border-l-2 border-l-violet-500/50 p-3 animate-[slide-in-up_0.2s_ease]">
-                      <div className="text-xs text-zinc-500">{item.transcription.text}</div>
-                      <div className="text-sm text-zinc-200 mt-1">{item.translation.text}</div>
+                    <div key={i} className="rounded-lg bg-white border border-slate-100 border-l-2 border-l-blue-400 p-3 shadow-sm animate-[slide-in-up_0.2s_ease]">
+                      <div className="text-xs text-slate-400">{item.transcription.text}</div>
+                      <div className="text-sm text-slate-700 mt-1">{item.translation.text}</div>
                     </div>
                   ))}
                   {history.length === 0 && (
-                    <div className="h-full flex items-center justify-center text-sm text-zinc-600">
+                    <div className="h-full flex items-center justify-center text-sm text-slate-400">
                       {t('dashboard.noHistoryHint')}
                     </div>
                   )}
@@ -294,16 +280,15 @@ export default function Dashboard() {
             {activeTab === 'settings' && (
               <SettingsPanel activeSection="settings" />
             )}
-            {activeTab === 'about' && <AboutPanel />}
           </div>
 
-          {/* ── 底部控制面板（弹幕/字幕页显示；音频/设置页隐藏） ── */}
+          {/* ── 底部控制面板 ── */}
           {(activeTab === 'danmaku' || activeTab === 'subtitle') && (
-            <div className="border-t border-zinc-800/40 bg-zinc-900/60 backdrop-blur-md p-3 space-y-3">
+            <div className="border-t border-slate-200 bg-white p-3 space-y-3">
               {/* 语言对控制 */}
               <div className="flex items-center gap-2">
                 <select
-                  className="flex-1 bg-zinc-950/60 border border-zinc-700/40 rounded-lg px-3 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-500/40"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
                   value={srcLang}
                   onChange={(e) => handleSetLanguage(e.target.value, tgtLang)}
                   disabled={langSwitching}
@@ -311,14 +296,14 @@ export default function Dashboard() {
                   {SUPPORTED_LANGS.map(lang => <option key={lang.code} value={lang.code}>{lang.icon} {lang.label}</option>)}
                 </select>
                 <button
-                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-zinc-700/40 bg-zinc-800/40 text-amber-400 hover:bg-amber-500/10 transition-all text-sm disabled:opacity-40"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-blue-600 hover:bg-blue-50 transition-all text-sm disabled:opacity-40"
                   onClick={handleSwapLanguage}
                   disabled={langSwitching}
                 >
                   ⇄
                 </button>
                 <select
-                  className="flex-1 bg-zinc-950/60 border border-zinc-700/40 rounded-lg px-3 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-500/40"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
                   value={tgtLang}
                   onChange={(e) => handleSetLanguage(srcLang, e.target.value)}
                   disabled={langSwitching}
@@ -329,15 +314,15 @@ export default function Dashboard() {
 
               {/* 平台 + 同传控制 */}
               <div className="flex items-center gap-3">
-                <div className="flex gap-1 bg-zinc-950/40 rounded-lg p-0.5">
+                <div className="flex gap-1 bg-slate-100 rounded-lg p-0.5">
                   <button
-                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${platform === 'douyin' ? 'bg-zinc-800 text-amber-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${platform === 'douyin' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     onClick={() => setPlatform('douyin')}
                   >
                     {t('dashboard.douyin')}
                   </button>
                   <button
-                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${platform === 'tiktok' ? 'bg-zinc-800 text-amber-400' : 'text-zinc-500 hover:text-zinc-300'}`}
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${platform === 'tiktok' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                     onClick={() => setPlatform('tiktok')}
                   >
                     {t('dashboard.tiktok')}
@@ -345,7 +330,7 @@ export default function Dashboard() {
                 </div>
 
                 <input
-                  className="flex-1 bg-zinc-950/40 border border-zinc-700/40 rounded-lg px-3 py-1.5 text-xs text-zinc-200 outline-none placeholder-zinc-600 focus:border-amber-500/40 transition-all"
+                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-700 outline-none placeholder-slate-400 focus:border-blue-400 transition-all"
                   type="text"
                   placeholder={platform === 'douyin' ? t('dashboard.roomInput') : t('dashboard.roomInputTiktok')}
                   value={roomId}
@@ -356,8 +341,8 @@ export default function Dashboard() {
                 <button
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     platformActive
-                      ? 'bg-red-500/15 text-red-400 hover:bg-red-500/25'
-                      : 'bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 disabled:opacity-40'
+                      ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                      : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 disabled:opacity-40'
                   }`}
                   onClick={platformActive ? stopPlatform : handleSwitchPlatform}
                   disabled={!roomId.trim() && !platformActive}
@@ -365,25 +350,25 @@ export default function Dashboard() {
                   {platformActive ? t('dashboard.disconnect') : t('dashboard.connect')}
                 </button>
 
-                <div className="w-px h-6 bg-zinc-800/50" />
+                <div className="w-px h-6 bg-slate-200" />
 
                 <button
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all ${
                     isRecording
-                      ? 'border-red-500/40 bg-red-500/15 text-red-400 hover:bg-red-500/25'
-                      : 'border-amber-500/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20'
+                      ? 'border-red-300 bg-red-50 text-red-600 hover:bg-red-100'
+                      : 'border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-100'
                   }`}
                   onClick={isRecording ? stopRecording : startRecording}
                 >
-                  <span className={`w-1.5 h-1.5 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-amber-400'}`} />
+                  <span className={`w-1.5 h-1.5 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-blue-500'}`} />
                   {isRecording ? t('dashboard.stopRecord') : t('dashboard.startRecord')}
                 </button>
 
                 <button
                   className={`w-7 h-7 flex items-center justify-center rounded-lg border text-xs transition-all ${
                     ttsEnabled
-                      ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400'
-                      : 'border-zinc-700/40 bg-zinc-800/30 text-zinc-500 hover:text-zinc-300'
+                      ? 'border-emerald-300 bg-emerald-50 text-emerald-600'
+                      : 'border-slate-200 bg-slate-50 text-slate-400 hover:text-slate-600'
                   }`}
                   onClick={() => toggleTTSEnabled(!ttsEnabled)}
                   title={ttsEnabled ? t('dashboard.ttsToggle') : t('dashboard.ttsDisabled')}
@@ -396,14 +381,14 @@ export default function Dashboard() {
               <div className="flex items-center gap-3">
                 <AudioSpectrum height={24} spectrumData={spectrumData} />
                 {isTTSSpeaking && (
-                  <div className="flex-1 flex items-center gap-2 px-3 py-1 bg-emerald-500/5 rounded-lg border border-emerald-500/10 text-xs text-emerald-400 truncate">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
+                  <div className="flex-1 flex items-center gap-2 px-3 py-1 bg-emerald-50 rounded-lg border border-emerald-200 text-xs text-emerald-700 truncate">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
                     <span className="truncate">{ttsCurrentText}</span>
                   </div>
                 )}
                 {health && (
-                  <div className="flex items-center gap-2 text-[10px] text-zinc-500">
-                    <span className={`w-1.5 h-1.5 rounded-full ${wsStatus === 'connected' ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
+                  <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                    <span className={`w-1.5 h-1.5 rounded-full ${wsStatus === 'connected' ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                     <span>{wsStatus === 'connected' ? 'WS 已连接' : wsStatus === 'connecting' ? '连接中...' : '未连接'}</span>
                   </div>
                 )}

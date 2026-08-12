@@ -1,46 +1,46 @@
 /* ========================================
-   乐曼同传 Leman Translate — Voicebox Dark Premium
+   乐曼同传 Leman Translate — Light Workstation
    ======================================== */
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@source "../../index.html";
+@source "../**/*.{js,ts,jsx,tsx}";
 
 :root {
-  /* 色彩系统 — Dark Zinc Premium */
-  --bg-deep: #09090b;
-  --bg-surface: rgba(24, 24, 27, 0.6);
-  --bg-glass: rgba(39, 39, 42, 0.45);
-  --bg-glass-hover: rgba(63, 63, 70, 0.5);
-
-  --border-glass: rgba(82, 82, 91, 0.5);
-  --border-glow: rgba(139, 92, 246, 0.3);
-
-  --text-primary: #fafafa;
-  --text-secondary: rgba(244, 244, 245, 0.7);
-  --text-muted: rgba(113, 113, 122, 0.8);
-
-  --accent-cyan: #22d3ee;
-  --accent-purple: #a855f7;
-  --accent-blue: #6366f1;
-  --accent-green: #10b981;
-  --accent-red: #ef4444;
-  --accent-orange: #f59e0b;
-
-  /* 发光效果 */
-  --glow-cyan: 0 0 20px rgba(34, 211, 238, 0.2), 0 0 40px rgba(34, 211, 238, 0.08);
-  --glow-purple: 0 0 20px rgba(168, 85, 247, 0.2), 0 0 40px rgba(168, 85, 247, 0.08);
-  --glow-green: 0 0 8px rgba(16, 185, 129, 0.5);
-
+  /* 色彩系统 — Light Premium */
+  --bg-main: #f8fafc;         /* 整体灰白背景 */
+  --bg-surface: #ffffff;      /* 卡片纯白背景 */
+  --bg-sidebar: #ffffff;      /* 边栏纯白背景 */
+  --bg-elevated: #f1f5f9;     /* 悬浮层背景 */
+  
+  --border-color: #e2e8f0;    /* 柔和灰色边框 */
+  --border-strong: #cbd5e1;   /* 强调边框 */
+  
+  --text-main: #0f172a;       /* 主文字深灰/近黑 */
+  --text-secondary: #475569;  /* 次要文字 */
+  --text-muted: #64748b;      /* 次要文字中灰 */
+  --text-placeholder: #94a3b8;
+  
+  --accent-primary: #3b82f6;  /* 主色调 (浅蓝/靛蓝) */
+  --accent-light: #eff6ff;    /* 选中激活轻阴影 */
+  --accent-hover: #2563eb;
+  
+  --success: #10b981;
+  --success-light: #ecfdf5;
+  --warning: #f59e0b;
+  --warning-light: #fffbeb;
+  --error: #ef4444;
+  --error-light: #fef2f2;
+  
   /* 圆角 */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
 
   /* 过渡 */
   --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -55,32 +55,32 @@ html, body {
   overflow: hidden;
   user-select: none;
   -webkit-user-select: none;
-  background: #09090b;
+  background: var(--bg-main);
 }
 
 body {
   font-family: 'Inter', 'Noto Sans SC', 'Be Vietnam Pro', system-ui, -apple-system, sans-serif;
-  background: #09090b;
-  color: #fafafa;
+  background: var(--bg-main);
+  color: var(--text-main);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* 滚动条 */
+/* 优雅精致的浅色滚动条 */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(82, 82, 91, 0.5);
-  border-radius: 2px;
+  background: #cbd5e1;
+  border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(113, 113, 122, 0.7);
+  background: #94a3b8;
 }
 
 /* Electron drag/no-drag regions */
@@ -93,13 +93,13 @@ body {
 
 /* 全局 Tailwind 补充 */
 .glass {
-  background: rgba(24, 24, 27, 0.5);
+  background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(16px);
-  border: 1px solid rgba(82, 82, 91, 0.4);
+  border: 1px solid rgba(226, 232, 240, 0.8);
 }
 
-.glow-text-cyan {
-  text-shadow: 0 0 12px rgba(34, 211, 238, 0.4);
+.glow-text-primary {
+  text-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
 }
 
 @keyframes float {
@@ -112,7 +112,7 @@ body {
   to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(16, 185, 129, 0.4); }
-  50% { box-shadow: 0 0 16px rgba(16, 185, 129, 0.8); }
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }

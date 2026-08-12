@@ -1,5 +1,5 @@
 /**
- * 本地大模型配置组件
+ * 本地大模型配置组件 (Light Theme)
  */
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -132,8 +132,8 @@ export default function LocalLLMConfig({ onToast }: LocalLLMConfigProps) {
   }
 
   return (
-    <div className="rounded-xl bg-zinc-950/40 border border-zinc-800/50 p-4 space-y-4">
-      <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">{t('settings.localLLM')}</label>
+    <div className="rounded-xl bg-white border border-slate-200 p-4 space-y-4 shadow-sm">
+      <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">{t('settings.localLLM')}</label>
       
       {/* Backend 选择 */}
       <div className="flex gap-2">
@@ -142,8 +142,8 @@ export default function LocalLLMConfig({ onToast }: LocalLLMConfigProps) {
             key={b}
             className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${
               localBackend === b
-                ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400'
-                : 'border-zinc-700/50 bg-zinc-900/40 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600'
+                ? 'border-blue-500 bg-blue-50 text-blue-700'
+                : 'border-slate-200 bg-slate-50 text-slate-500 hover:text-slate-700 hover:border-slate-300'
             }`}
             onClick={() => setLocalBackend(b)}
           >
@@ -154,37 +154,37 @@ export default function LocalLLMConfig({ onToast }: LocalLLMConfigProps) {
 
       {/* Ollama 配置 */}
       {localBackend === 'ollama' && (
-        <div className="rounded-lg bg-zinc-900/40 border border-zinc-800/40 p-3 space-y-2">
-          <div className="space-y-1">
-            <label className="text-xs text-zinc-500">{t('settings.ollamaUrl')}</label>
+        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-2">
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-600">{t('settings.ollamaUrl')}</label>
             <input
-              className="w-full bg-zinc-950/60 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-cyan-500/50"
+              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
               value={localOllamaUrl}
               onChange={(e) => setLocalOllamaUrl(e.target.value)}
               placeholder="http://127.0.0.1:11434"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-zinc-500">{t('settings.modelDir')}</label>
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-600">{t('settings.modelDir')}</label>
             <input
-              className="w-full bg-zinc-950/60 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-cyan-500/50"
+              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
               value={localModelDir}
               onChange={(e) => setLocalModelDir(e.target.value)}
               placeholder="默认: %APPDATA%/leman-translate/models"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-zinc-500">{t('settings.modelName')}</label>
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-600">{t('settings.modelName')}</label>
             <input
-              className="w-full bg-zinc-950/60 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-cyan-500/50"
+              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
               value={localModelName}
               onChange={(e) => setLocalModelName(e.target.value)}
               placeholder="如: qwen2.5:7b"
             />
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-950/40 rounded-lg">
-            <span className={`w-2 h-2 rounded-full ${localLLMStatus?.ollama_available ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`} />
-            <span className="text-xs text-zinc-400">
+          <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg">
+            <span className={`w-2 h-2 rounded-full ${localLLMStatus?.ollama_available ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span className="text-xs text-slate-600">
               {localLLMStatus?.ollama_available ? t('settings.ollamaOnline') : t('settings.ollamaOffline')}
             </span>
           </div>
@@ -193,37 +193,37 @@ export default function LocalLLMConfig({ onToast }: LocalLLMConfigProps) {
 
       {/* CUDA 配置 */}
       {localBackend === 'cuda' && (
-        <div className="rounded-lg bg-zinc-900/40 border border-zinc-800/40 p-3 space-y-2">
-          <div className="space-y-1">
-            <label className="text-xs text-zinc-500">{t('settings.cudaModelPath')}</label>
+        <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 space-y-2">
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-600">{t('settings.cudaModelPath')}</label>
             <input
-              className="w-full bg-zinc-950/60 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-cyan-500/50"
+              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
               value={localCudaModelPath}
               onChange={(e) => setLocalCudaModelPath(e.target.value)}
               placeholder="C:\\models\\qwen2.5-7b-instruct-q4_k_m.gguf"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-zinc-500">{t('settings.cudaModelUrl')}</label>
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-600">{t('settings.cudaModelUrl')}</label>
             <input
-              className="w-full bg-zinc-950/60 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-cyan-500/50"
+              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
               value={localCudaDownloadUrl}
               onChange={(e) => setLocalCudaDownloadUrl(e.target.value)}
               placeholder="https://huggingface.co/.../model.gguf"
             />
           </div>
-          <div className="space-y-1">
-            <label className="text-xs text-zinc-500">{t('settings.modelDir')}</label>
+          <div className="space-y-1.5">
+            <label className="text-xs text-slate-600">{t('settings.modelDir')}</label>
             <input
-              className="w-full bg-zinc-950/60 border border-zinc-700/50 rounded-lg px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-cyan-500/50"
+              className="w-full bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
               value={localModelDir}
               onChange={(e) => setLocalModelDir(e.target.value)}
               placeholder="默认: %APPDATA%/leman-translate/models"
             />
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-950/40 rounded-lg">
-            <span className={`w-2 h-2 rounded-full ${localLLMStatus?.cuda_available ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`} />
-            <span className="text-xs text-zinc-400">
+          <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg">
+            <span className={`w-2 h-2 rounded-full ${localLLMStatus?.cuda_available ? 'bg-emerald-500' : 'bg-red-500'}`} />
+            <span className="text-xs text-slate-600">
               {localLLMStatus?.cuda_available ? t('settings.cudaReady') : t('settings.cudaNeedPath')}
             </span>
           </div>
@@ -232,7 +232,7 @@ export default function LocalLLMConfig({ onToast }: LocalLLMConfigProps) {
 
       {/* 保存按钮 */}
       <button
-        className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-sm font-medium py-2.5 rounded-lg transition-all active:scale-[0.98] disabled:cursor-not-allowed"
+        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-medium py-2.5 rounded-lg transition-all active:scale-[0.98] disabled:cursor-not-allowed"
         onClick={handleSaveLocalConfig}
         disabled={savingLocal}
       >
@@ -241,16 +241,16 @@ export default function LocalLLMConfig({ onToast }: LocalLLMConfigProps) {
 
       {/* 拉取模型 */}
       <div className="space-y-2">
-        <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">{t('settings.pullModel')}</label>
+        <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">{t('settings.pullModel')}</label>
         <div className="flex gap-2">
           <input
-            className="flex-1 bg-zinc-900/60 border border-zinc-700/50 rounded-lg px-3 py-2 text-sm text-zinc-200 outline-none placeholder-zinc-700 focus:border-violet-500/50"
+            className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none placeholder-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
             placeholder={localBackend === 'ollama' ? t('settings.pullModelPlaceholderOllama') : t('settings.pullModelPlaceholderCuda')}
             value={pullModelName}
             onChange={(e) => setPullModelName(e.target.value)}
           />
           <button
-            className="px-4 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-sm font-medium rounded-lg transition-all active:scale-[0.98] disabled:cursor-not-allowed"
+            className="px-4 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-medium rounded-lg transition-all active:scale-[0.98] disabled:cursor-not-allowed"
             onClick={handlePullModel}
             disabled={pulling}
           >
@@ -262,14 +262,14 @@ export default function LocalLLMConfig({ onToast }: LocalLLMConfigProps) {
       {/* 已安装模型 */}
       {localModels.length > 0 && (
         <div className="space-y-2">
-          <label className="text-[10px] font-medium text-zinc-500 uppercase tracking-widest">{t('settings.installedModels')}</label>
+          <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">{t('settings.installedModels')}</label>
           <div className="space-y-1.5">
             {localModels.map(model => (
-              <div key={model.name} className="flex items-center gap-3 px-3 py-2 bg-zinc-900/40 border border-zinc-800/40 rounded-lg">
-                <span className="flex-1 text-sm text-zinc-200 font-medium">{model.name}</span>
-                <span className="text-xs text-zinc-600">{model.size_human}</span>
+              <div key={model.name} className="flex items-center gap-3 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg">
+                <span className="flex-1 text-sm text-slate-700 font-medium">{model.name}</span>
+                <span className="text-xs text-slate-500">{model.size_human}</span>
                 <button
-                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-zinc-700/40 text-zinc-500 hover:text-red-400 hover:border-red-500/30 hover:bg-red-500/10 transition-all"
+                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-all"
                   onClick={() => handleDeleteModel(model.name)}
                   type="button"
                 >

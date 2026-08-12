@@ -1,6 +1,5 @@
 /**
- * WhisperConfig — Whisper 语音识别模型配置组件
- * 控制模型大小（tiny~large-v3）、运行设备（cuda/cpu/auto）、模型下载目录
+ * WhisperConfig — Whisper 语音识别模型配置组件 (Light Theme)
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -90,18 +89,18 @@ export default function WhisperConfig({ onToast }: WhisperConfigProps) {
   if (!loaded) return null
 
   return (
-    <div className="space-y-3">
+    <div className="rounded-xl bg-white border border-slate-200 p-4 space-y-3 shadow-sm">
       {/* 标题行 */}
-      <div className="flex items-center gap-2 pb-2 border-b border-zinc-800/50">
+      <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
         <span className="text-base">🎙️</span>
-        <h4 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">
+        <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
           Whisper 语音识别
         </h4>
         {modelInfo && (
           <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${
             modelInfo.available
-              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-              : 'bg-zinc-800 text-zinc-500'
+              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+              : 'bg-slate-100 text-slate-500'
           }`}>
             {modelInfo.available ? '已加载' : '未加载'}
           </span>
@@ -110,9 +109,9 @@ export default function WhisperConfig({ onToast }: WhisperConfigProps) {
 
       {/* 模型大小 */}
       <div className="space-y-1.5">
-        <label className="text-[10px] text-zinc-500 uppercase tracking-wider">模型大小</label>
+        <label className="text-[10px] text-slate-500 uppercase tracking-wider">模型大小</label>
         <select
-          className="w-full bg-zinc-950/60 border border-zinc-700/40 rounded-lg px-3 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-500/40"
+          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
           value={modelSize}
           onChange={(e) => setModelSize(e.target.value)}
         >
@@ -124,9 +123,9 @@ export default function WhisperConfig({ onToast }: WhisperConfigProps) {
 
       {/* 运行设备 */}
       <div className="space-y-1.5">
-        <label className="text-[10px] text-zinc-500 uppercase tracking-wider">运行设备</label>
+        <label className="text-[10px] text-slate-500 uppercase tracking-wider">运行设备</label>
         <select
-          className="w-full bg-zinc-950/60 border border-zinc-700/40 rounded-lg px-3 py-1.5 text-xs text-zinc-200 outline-none focus:border-amber-500/40"
+          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
           value={device}
           onChange={(e) => setDevice(e.target.value)}
         >
@@ -138,12 +137,12 @@ export default function WhisperConfig({ onToast }: WhisperConfigProps) {
 
       {/* 模型下载目录 */}
       <div className="space-y-1.5">
-        <label className="text-[10px] text-zinc-500 uppercase tracking-wider">
+        <label className="text-[10px] text-slate-500 uppercase tracking-wider">
           模型下载目录
-          <span className="text-zinc-600 ml-1">（留空使用默认缓存路径）</span>
+          <span className="text-slate-400 ml-1">（留空使用默认缓存路径）</span>
         </label>
         <input
-          className="w-full bg-zinc-950/60 border border-zinc-700/40 rounded-lg px-3 py-1.5 text-xs text-zinc-200 outline-none placeholder-zinc-600 focus:border-amber-500/40 font-mono"
+          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none placeholder-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100 font-mono"
           type="text"
           placeholder="例: D:\models\faster-whisper"
           value={modelDir}
@@ -155,13 +154,13 @@ export default function WhisperConfig({ onToast }: WhisperConfigProps) {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all border border-amber-500/20 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 disabled:opacity-40"
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40"
       >
         {saving ? '⏳ 保存中...' : '💾 保存 Whisper 配置'}
       </button>
 
       {/* 提示 */}
-      <p className="text-[9px] text-zinc-600 leading-relaxed">
+      <p className="text-[9px] text-slate-400 leading-relaxed">
         修改模型大小或设备后需要重启应用才能生效。更大的模型提供更高精度但占用更多显存/内存。
       </p>
     </div>

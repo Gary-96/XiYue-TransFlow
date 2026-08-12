@@ -141,6 +141,9 @@ class TTSService:
         self.voices_loaded = False
         self._models_dir = None
         self._all_edge_voices: List[Dict] = []
+        self.enabled = True  # TTS 开关状态
+        self.current_voice_id = None  # 当前音色 ID
+        self._queue: List[str] = []  # TTS 队列
         self._init_models_dir()
         self._preload_voice()
 
@@ -345,6 +348,16 @@ class TTSService:
                 self.current_voice.pitch = max(-100, min(100, pitch))
             if volume is not None:
                 self.current_voice.volume = max(0.0, min(1.0, volume))
+
+    def clear_queue(self):
+        """清除 TTS 队列"""
+        self._queue.clear()
+        logger.info("TTS queue cleared")
+
+    @property
+    def queue_size(self) -> int:
+        """获取队列大小"""
+        return len(self._queue)
 
 
 # ── 单例实例 ──────────────────────────────────────────────────

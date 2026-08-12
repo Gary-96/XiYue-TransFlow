@@ -42,6 +42,10 @@ echo [3/4] PyInstaller packaging (5-10 minutes)...
     --hidden-import numpy.core ^
     --hidden-import torch ^
     --hidden-import torchaudio ^
+    --hidden-import torch.nn ^
+    --hidden-import torch.nn.functional ^
+    --hidden-import torch.optim ^
+    --hidden-import torch.utils.data ^
     --hidden-import faster_whisper ^
     --hidden-import ctranslate2 ^
     --hidden-import onnxruntime ^
@@ -60,9 +64,16 @@ echo [3/4] PyInstaller packaging (5-10 minutes)...
     --hidden-import PyExecJS ^
     --hidden-import blackboxprotobuf ^
     --hidden-import google.protobuf ^
+    --hidden-import app.services.whisper_service ^
     --hidden-import static.Response_pb2 ^
     --hidden-import static.Request_pb2 ^
     --hidden-import app.services.llm_service ^
+    --hidden-import collectors.tiktok_collector ^
+    --hidden-import collectors.douyin_collector ^
+    --hidden-import dy_apis.douyin_api ^
+    --hidden-import builder.auth ^
+    --hidden-import bs4 ^
+    --hidden-import lxml ^
     --collect-all faster_whisper ^
     --collect-all ctranslate2 ^
     --collect-all onnxruntime ^
@@ -75,7 +86,7 @@ echo [3/4] PyInstaller packaging (5-10 minutes)...
     --collect-all bs4 ^
     --collect-all lxml ^
     --collect-all blackboxprotobuf ^
-    "%BACKEND_DIR%\main_manager.py"
+    "%BACKEND_DIR%\\main_manager.py"
 
 if errorlevel 1 (
     echo [X] PyInstaller failed

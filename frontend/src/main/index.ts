@@ -1,7 +1,23 @@
+// ── 全局异常防御（必须在所有 import 之前注册）──────────────────
+// EPIPE: 子进程（backend_engine.exe）退出时 stdout/stderr 管道断开,
+// Node.js 默认会抛 uncaughtException → Electron 弹崩溃对话框
+process.on('uncaughtException', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EPIPE') {
+    // 管道断开（子进程退出导致），静默忽略
+    console.warn('捕获到子进程 EPIPE 管道断开信号，已忽略')
+    return
+  }
+  console.error('未捕获的主进程异常:', error)
+})
+
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('未处理的 Promise 拒绝:', reason)
+})
+
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { spawn, execSync, ChildProcess } from 'child_process'
-import { existsSync, mkdirSync, appendFileSync } from 'fs'
+import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs'
 import { windowManager } from './windowManager'
 import { initAutoUpdater } from './autoUpdater'
 import net from 'net'
@@ -10,7 +26,7 @@ import net from 'net'
 let backendProcess: ChildProcess | null = null
 let isQuitting = false
 let healthCheckRetryCount = 0
-const MAX_HEALTH_RETRIES = 30 // 30 × 1s = 30s 超时
+const MAX_HEALTH_RETRIES = 60 // 60 × 300ms = 18s 超时（后端启动需要约 8s）
 
 let restartCount = 0
 const MAX_RESTART_COUNT = 3
@@ -29,11 +45,20 @@ function writeLog(level: string, message: string): void {
   ensureLogDir()
   const timestamp = new Date().toISOString()
   const line = `[${timestamp}] [${level}] ${message}\n`
-  appendFileSync(LOG_FILE, line, 'utf-8')
-  if (level === 'ERROR') {
-    console.error(line.trimEnd())
-  } else {
-    console.log(line.trimEnd())
+  try {
+    appendFileSync(LOG_FILE, line, 'utf-8')
+  } catch (e) {
+    // 写日志本身失败（EPIPE 等）不应崩溃
+  }
+  // 控制台输出包裹 try-catch，防止 EPIPE
+  try {
+    if (level === 'ERROR') {
+      console.error(line.trimEnd())
+    } else {
+      console.log(line.trimEnd())
+    }
+  } catch {
+    // console.error/log 可能因 stdout 管道断开抛 EPIPE，忽略
   }
 }
 
@@ -120,16 +145,38 @@ function startBackend(): void {
   const pid = backendProcess.pid
   writeLog('INFO', `后端进程已启动 (PID: ${pid})`)
 
-  // stdout
+  // stdout — 包裹 try-catch 防止 EPIPE
   backendProcess.stdout?.on('data', (data: Buffer) => {
-    const text = data.toString().trim()
-    if (text) writeLog('INFO', `[stdout] ${text}`)
+    try {
+      const text = data.toString().trim()
+      if (text) writeLog('INFO', `[stdout] ${text}`)
+    } catch {
+      // 管道断开时 toString/write 可能抛 EPIPE
+    }
   })
 
-  // stderr — 关键：捕获错误日志
+  // stdout 管道错误事件
+  backendProcess.stdout?.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code !== 'EPIPE') {
+      writeLog('WARN', `stdout pipe error: ${err.message}`)
+    }
+  })
+
+  // stderr — 关键：捕获错误日志，包裹 try-catch
   backendProcess.stderr?.on('data', (data: Buffer) => {
-    const text = data.toString().trim()
-    if (text) writeLog('ERROR', `[stderr] ${text}`)
+    try {
+      const text = data.toString().trim()
+      if (text) writeLog('ERROR', `[stderr] ${text}`)
+    } catch {
+      // 管道断开时忽略
+    }
+  })
+
+  // stderr 管道错误事件
+  backendProcess.stderr?.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code !== 'EPIPE') {
+      writeLog('WARN', `stderr pipe error: ${err.message}`)
+    }
   })
 
   backendProcess.on('exit', (code, signal) => {
@@ -176,10 +223,14 @@ async function checkBackendHealth(port: number): Promise<boolean> {
 
 // ── 扫描端口获取实际端口号 ────────────────────────────────────
 async function detectBackendPort(): Promise<number | null> {
-  const config = await getConfigPort()
-  const startPort = config?.server_port ?? 15387
+  // 1. 先从磁盘配置文件读取端口（后端还没启动，API 不可用）
+  const filePort = getConfigPortFromFile()
+  const startPort = filePort ?? 15387
+  if (filePort) {
+    writeLog('INFO', `从配置文件读取到端口: ${filePort}`)
+  }
 
-  // 尝试配置端口，最多偏移 10 个端口
+  // 2. 尝试配置端口，最多偏移 10 个端口
   for (let offset = 0; offset <= 10; offset++) {
     const port = startPort + offset
     const healthy = await checkBackendHealth(port)
@@ -187,10 +238,30 @@ async function detectBackendPort(): Promise<number | null> {
       return port
     }
   }
-  return null
+  // 3. 扫描失败，返回配置文件端口（或默认端口），后续做健康检查轮询时会等到后端启动
+  return startPort
 }
 
 // ── 获取配置中的默认端口 ────────────────────────────────────
+// 先从磁盘配置文件读取（解决「先有鸡还是先有蛋」问题：后端还没启动时 API 不可用）
+function getConfigPortFromFile(): number | null {
+  try {
+    // Windows: %APPDATA%\leman-translate\config.json
+    const configPath = join(app.getPath('appData'), 'leman-translate', 'config.json')
+    if (existsSync(configPath)) {
+      const raw = readFileSync(configPath, 'utf-8')
+      const json = JSON.parse(raw)
+      if (json?.server_port && typeof json.server_port === 'number') {
+        return json.server_port
+      }
+    }
+  } catch {
+    // 配置文件读取失败，忽略
+  }
+  return null
+}
+
+// ── 获取配置中的默认端口（从后端 API 读取，后端已启动时可用）────────
 async function getConfigPort(): Promise<{ server_port: number } | null> {
   try {
     const http = await import('http')
@@ -225,13 +296,13 @@ async function waitForBackendAndCreateWindow(): Promise<void> {
   // 先创建主窗口显示加载态
   windowManager.createDashboard()
 
-  // 扫描端口
+  // 扫描端口（后端可能还没启动，detectBackendPort 会返回配置端口用于后续轮询）
   const port = await detectBackendPort()
   if (port) {
     detectedBackendPort = port
-    writeLog('INFO', `后端端口已检测: ${port}`)
+    writeLog('INFO', `使用后端端口: ${port}（等待后端启动...）`)
   } else {
-    writeLog('WARN', '端口扫描失败，使用默认端口 15387')
+    writeLog('WARN', '端口检测失败，使用默认端口 15387')
   }
 
   // 尝试连接检测到的端口
@@ -259,6 +330,9 @@ function stopBackend(): void {
     isQuitting = true
     writeLog('INFO', `停止后端进程 (PID: ${backendProcess.pid})`)
     try {
+      // 先移除 stdio 监听器，防止 kill 后管道断开触发 EPIPE
+      backendProcess.stdout?.removeAllListeners()
+      backendProcess.stderr?.removeAllListeners()
       backendProcess.kill('SIGTERM')
     } catch {
       // 进程可能已退出

@@ -16,7 +16,7 @@ export default defineConfig({
             rollupOptions: {
               external: ['electron'],
               output: {
-                format: 'es'
+                format: 'cjs'  // 主进程使用 CommonJS
               }
             }
           }
@@ -27,10 +27,16 @@ export default defineConfig({
         vite: {
           build: {
             outDir: 'dist-electron/preload',
+            lib: {
+              entry: 'src/preload/index.ts',
+              formats: ['cjs'],
+              fileName: () => 'index.js'
+            },
             rollupOptions: {
               external: ['electron'],
               output: {
-                format: 'es'
+                format: 'cjs',
+                entryFileNames: 'index.js'
               }
             }
           }
