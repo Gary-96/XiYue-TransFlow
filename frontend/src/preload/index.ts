@@ -20,6 +20,9 @@ export interface ElectronAPI {
   // 打开后端日志文件
   openBackendLog: () => Promise<void>
 
+  // 获取本机机器码
+  getMachineId: () => Promise<string>
+
   // ── 自动更新 ──────────────────────────────
   checkForUpdate: () => Promise<{ ok: boolean; error?: string }>
   downloadUpdate: () => Promise<{ ok: boolean; error?: string }>
@@ -52,6 +55,9 @@ const electronAPI: ElectronAPI = {
 
   // 打开后端日志文件
   openBackendLog: () => ipcRenderer.invoke('backend:open-log'),
+
+  // 获取机器码
+  getMachineId: () => ipcRenderer.invoke('machine:get-id'),
 
   // ── 自动更新 ──────────────────────────────
   checkForUpdate: () => ipcRenderer.invoke('update:check'),

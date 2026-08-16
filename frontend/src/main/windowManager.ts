@@ -36,7 +36,7 @@ class WindowManager {
       show: false,
       x,
       y,
-      backgroundColor: '#1a1a2e',
+      backgroundColor: '#06060f',
       titleBarStyle: 'hidden',
       webPreferences: {
         // __dirname 在 Electron main process 中可用

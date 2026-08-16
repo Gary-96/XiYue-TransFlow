@@ -59,3 +59,8 @@ backend/*.spec
 build/
 backend_engine.spec
 output/
+
+# 10. 云端授权服务（独立服务，不打包进客户端）
+server/
+server/*.db
+server/__pycache__/

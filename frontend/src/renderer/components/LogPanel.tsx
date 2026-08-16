@@ -1,4 +1,4 @@
-// 乐曼同传 — 日志面板组件
+// 乐曼同传 — 日志面板组件 (Glassmorphism Aurora 深色)
 // 实时显示后端服务器日志，支持自动滚动、过滤、清空
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -15,10 +15,10 @@ interface LogPanelProps {
 }
 
 const LEVEL_COLORS: Record<string, { bg: string; text: string; badge: string }> = {
-  DEBUG:   { bg: 'bg-zinc-800/40',   text: 'text-zinc-400',   badge: 'bg-zinc-700/60 text-zinc-400' },
-  INFO:    { bg: 'bg-blue-950/20',   text: 'text-blue-300',   badge: 'bg-blue-900/40 text-blue-300' },
-  WARNING: { bg: 'bg-amber-950/20',  text: 'text-amber-300',  badge: 'bg-amber-900/40 text-amber-300' },
-  ERROR:   { bg: 'bg-red-950/20',    text: 'text-red-300',    badge: 'bg-red-900/40 text-red-300' },
+  DEBUG:   { bg: 'bg-white/[0.02]',     text: 'text-white/50',   badge: 'bg-white/[0.1] text-white/50' },
+  INFO:    { bg: 'bg-blue-500/[0.06]',  text: 'text-blue-200',   badge: 'bg-blue-500/20 text-blue-300' },
+  WARNING: { bg: 'bg-amber-500/[0.06]', text: 'text-amber-200',  badge: 'bg-amber-500/20 text-amber-300' },
+  ERROR:   { bg: 'bg-rose-500/[0.08]',  text: 'text-rose-200',   badge: 'bg-rose-500/20 text-rose-300' },
 }
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -95,20 +95,20 @@ export default function LogPanel({ maxLines = 500 }: LogPanelProps) {
   return (
     <div className="h-full flex flex-col">
       {/* 标题栏 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/50">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-white/[0.08] bg-white/[0.03]">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-semibold text-zinc-200">📋 {t('nav.log')}</span>
-          <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-green-400 animate-pulse' : 'bg-red-500'}`} />
+          <span className="text-sm font-semibold text-white/90">📋 {t('nav.log')}</span>
+          <span className={`w-2 h-2 rounded-full ${wsConnected ? 'bg-emerald-400 animate-pulse shadow-[0_0_6px_rgba(52,211,153,0.7)]' : 'bg-rose-400'}`} />
         </div>
         <div className="flex items-center gap-2">
           {/* 统计 */}
           {errorCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-red-900/40 text-red-400 font-mono">
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-300 font-mono">
               E:{errorCount}
             </span>
           )}
           {warnCount > 0 && (
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-900/40 text-amber-400 font-mono">
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-mono">
               W:{warnCount}
             </span>
           )}
@@ -116,8 +116,8 @@ export default function LogPanel({ maxLines = 500 }: LogPanelProps) {
           <button
             className={`px-2 py-0.5 rounded text-[10px] border transition-all ${
               autoScroll
-                ? 'border-cyan-500/40 bg-cyan-500/10 text-cyan-400'
-                : 'border-zinc-700/40 text-zinc-500 hover:text-zinc-300'
+                ? 'border-blue-400/40 bg-blue-500/15 text-blue-300'
+                : 'border-white/[0.1] text-white/50 hover:text-white/80 hover:bg-white/[0.06]'
             }`}
             onClick={() => setAutoScroll(v => !v)}
             title={autoScroll ? '停止自动滚动' : '启用自动滚动'}
@@ -126,7 +126,7 @@ export default function LogPanel({ maxLines = 500 }: LogPanelProps) {
           </button>
           {/* 清空 */}
           <button
-            className="px-2 py-0.5 rounded text-[10px] text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50 border border-zinc-700/40 transition-all"
+            className="px-2 py-0.5 rounded text-[10px] text-white/50 hover:text-white/80 hover:bg-white/[0.08] border border-white/[0.1] transition-all"
             onClick={clearLogs}
           >
             {t('danmaku.clear')}
@@ -135,21 +135,21 @@ export default function LogPanel({ maxLines = 500 }: LogPanelProps) {
       </div>
 
       {/* 过滤栏 */}
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-zinc-800/30 bg-zinc-900/20">
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-white/[0.08] bg-white/[0.02]">
         {['ALL', 'INFO', 'WARNING', 'ERROR', 'DEBUG'].map(level => (
           <button
             key={level}
             className={`px-2 py-0.5 rounded text-[10px] font-mono transition-all ${
               filter === level
-                ? 'bg-zinc-700/60 text-white'
-                : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40'
+                ? 'bg-gradient-to-r from-blue-500/30 to-purple-500/30 text-white border border-white/[0.15]'
+                : 'text-white/50 hover:text-white/80 hover:bg-white/[0.08]'
             }`}
             onClick={() => setFilter(level)}
           >
             {level === 'ALL' ? '全部' : LEVEL_LABELS[level]}
           </button>
         ))}
-        <span className="ml-auto text-[10px] text-zinc-600 font-mono">
+        <span className="ml-auto text-[10px] text-white/30 font-mono">
           {filtered.length} 条
         </span>
       </div>
@@ -157,7 +157,7 @@ export default function LogPanel({ maxLines = 500 }: LogPanelProps) {
       {/* 日志列表 */}
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-2">
         {filtered.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center gap-2 text-zinc-600">
+          <div className="h-full flex flex-col items-center justify-center gap-2 text-white/30">
             <div className="text-2xl opacity-40">📋</div>
             <div className="text-xs">暂无日志</div>
           </div>
@@ -167,18 +167,18 @@ export default function LogPanel({ maxLines = 500 }: LogPanelProps) {
             return (
               <div
                 key={i}
-                className={`flex items-start gap-2 py-1 px-2 rounded-md text-[11px] font-mono hover:bg-zinc-800/30 transition-colors ${colors.bg}`}
+                className={`flex items-start gap-2 py-1 px-2 rounded-md text-[11px] font-mono hover:bg-white/[0.06] transition-colors ${colors.bg}`}
               >
                 {/* 等级 */}
                 <span className={`flex-shrink-0 px-1 py-0.5 rounded text-[9px] font-bold ${colors.badge}`}>
                   {LEVEL_LABELS[entry.level]}
                 </span>
                 {/* 时间 */}
-                <span className="flex-shrink-0 text-zinc-500">
+                <span className="flex-shrink-0 text-white/30">
                   {entry.timestamp}
                 </span>
                 {/* 来源 */}
-                <span className="flex-shrink-0 text-zinc-600 max-w-[100px] truncate">
+                <span className="flex-shrink-0 text-white/30 max-w-[100px] truncate">
                   {entry.logger.replace('backend.main_manager', 'main')}
                 </span>
                 {/* 内容 */}

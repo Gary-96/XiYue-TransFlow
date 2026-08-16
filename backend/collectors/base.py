@@ -8,7 +8,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ class BaseCollector(ABC):
     """Abstract base class for all platform collectors"""
 
     def __init__(
-        self, platform_name: str, message_callback: Optional[Callable] = None
+        self, platform_name: str, message_callback: Optional[Callable[[Dict[str, Any]], None]] = None
     ):
         self.platform_name = platform_name
         self.message_callback = message_callback

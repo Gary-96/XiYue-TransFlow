@@ -1,5 +1,5 @@
 /**
- * SettingsPanel — 设置面板主组件 (Light Theme)
+ * SettingsPanel — 设置面板主组件 (Glassmorphism Aurora 深色)
  */
 
 import { useState, useCallback, useEffect } from 'react'
@@ -34,27 +34,16 @@ export default function SettingsPanel({ activeSection }: SettingsPanelProps) {
   const showAudio = showAll || activeSection === 'audio'
   const showSettings = showAll || activeSection === 'settings'
 
-  const sectionTitles: Record<string, string> = {
-    audio: t('settings.audioRoute'),
-    settings: t('settings.title'),
-  }
-
   return (
-    <div className="h-full overflow-y-auto px-4 py-4 space-y-4 bg-slate-50">
-      {/* 标题 */}
-      <div className="flex items-center gap-2 pb-3 border-b border-slate-200">
-        <span className="text-base">⚙️</span>
-        <h3 className="text-sm font-semibold text-slate-800">{t('settings.title')}</h3>
-      </div>
-
+    <div className="h-full overflow-y-auto px-4 py-4 space-y-4">
       {/* Toast */}
       {toast && (
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border animate-[slide-in-up_0.3s_ease] ${
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium border backdrop-blur-xl animate-[slide-in-up_0.3s_ease] ${
           toast.type === 'success'
-            ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300'
             : toast.type === 'error'
-              ? 'bg-red-50 border-red-200 text-red-700'
-              : 'bg-blue-50 border-blue-200 text-blue-700'
+              ? 'bg-rose-500/15 border-rose-400/30 text-rose-300'
+              : 'bg-blue-500/15 border-blue-400/30 text-blue-300'
         }`}>
           <span>{toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : 'ℹ️'}</span>
           <span>{toast.msg}</span>

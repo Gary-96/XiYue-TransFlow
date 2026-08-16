@@ -258,7 +258,7 @@ async def get_call_status():
         from app.services.call_translation_service import call_translation_service
         return {
             "status": "success",
-            "is_running": call_translation_service.state.running,
+            "is_running": call_translation_service.state.is_running,
             "mode": call_translation_service.state.mode.value if call_translation_service.state.mode else "subtitle_only",
         }
     except Exception as e:

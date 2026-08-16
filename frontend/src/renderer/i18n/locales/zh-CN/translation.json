@@ -3,7 +3,8 @@
     "danmaku": "弹幕翻译",
     "subtitle": "同传字幕",
     "settings": "API & 设置",
-    "language": "语言"
+    "language": "语言",
+    "log": "运行日志"
   },
   "dashboard": {
     "brand": "乐曼同传小助手",
@@ -137,7 +138,13 @@
     "testingConnection": "测试中...",
     "connectionSuccess": "连接成功",
     "connectionFailed": "连接失败",
-    "saveTest": "💾 保存并测试"
+    "saveTest": "💾 保存并测试",
+    "whisperTitle": "语音识别引擎",
+    "modelSize": "模型大小",
+    "runDevice": "运行设备",
+    "modelLoaded": "已加载",
+    "modelNotLoaded": "未加载",
+    "whisperHint": "提示：模型大小影响识别精度与速度。Tiny 最快但精度最低，Large v3 精度最高但需约 2.9GB 显存/内存。CUDA 需要 NVIDIA GPU 与 CUDA 环境支持。"
   },
   "common": {
     "cancel": "取消",

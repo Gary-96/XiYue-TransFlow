@@ -21,12 +21,13 @@ import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs'
 import { windowManager } from './windowManager'
 import { initAutoUpdater } from './autoUpdater'
 import net from 'net'
+import { machineIdSync } from 'node-machine-id'
 
 // ── 状态 ──────────────────────────────────────────────────────
 let backendProcess: ChildProcess | null = null
 let isQuitting = false
 let healthCheckRetryCount = 0
-const MAX_HEALTH_RETRIES = 60 // 60 × 300ms = 18s 超时（后端启动需要约 8s）
+const MAX_HEALTH_RETRIES = 30 // 30 × 300ms = 9s 超时（后端轻量启动约 2-4s）
 
 let restartCount = 0
 const MAX_RESTART_COUNT = 3
@@ -47,7 +48,7 @@ function writeLog(level: string, message: string): void {
   const line = `[${timestamp}] [${level}] ${message}\n`
   try {
     appendFileSync(LOG_FILE, line, 'utf-8')
-  } catch (e) {
+  } catch {
     // 写日志本身失败（EPIPE 等）不应崩溃
   }
   // 控制台输出包裹 try-catch，防止 EPIPE
@@ -75,7 +76,7 @@ function getBackendPaths(): BackendPaths {
   if (isDev) {
     const backendDir = join(process.resourcesPath, '..', '..', 'backend')
     return {
-      exe: join(backendDir, 'main_manager.py'),
+      exe: join(backendDir, 'main.py'),
       cwd: backendDir,
       isDev: true,
     }
@@ -93,7 +94,6 @@ function getBackendPaths(): BackendPaths {
 // ── 残留进程清理 ──────────────────────────────────────────────
 function killStaleBackend(): void {
   try {
-    // tasklist + 过滤 backend_engine.exe
     const output = execSync('tasklist /FI "IMAGENAME eq backend_engine.exe" /FO CSV /NH', {
       windowsHide: true,
       timeout: 5000,
@@ -101,7 +101,7 @@ function killStaleBackend(): void {
 
     if (output.includes('backend_engine.exe')) {
       writeLog('WARN', '检测到残留 backend_engine.exe 进程，正在清理...')
-      execSync('taskkill /IM backend_engine.exe /F', {
+      execSync('taskkill /IM backend_engine.exe /F /T', {
         windowsHide: true,
         timeout: 5000,
       })
@@ -221,32 +221,9 @@ async function checkBackendHealth(port: number): Promise<boolean> {
   })
 }
 
-// ── 扫描端口获取实际端口号 ────────────────────────────────────
-async function detectBackendPort(): Promise<number | null> {
-  // 1. 先从磁盘配置文件读取端口（后端还没启动，API 不可用）
-  const filePort = getConfigPortFromFile()
-  const startPort = filePort ?? 15387
-  if (filePort) {
-    writeLog('INFO', `从配置文件读取到端口: ${filePort}`)
-  }
-
-  // 2. 尝试配置端口，最多偏移 10 个端口
-  for (let offset = 0; offset <= 10; offset++) {
-    const port = startPort + offset
-    const healthy = await checkBackendHealth(port)
-    if (healthy) {
-      return port
-    }
-  }
-  // 3. 扫描失败，返回配置文件端口（或默认端口），后续做健康检查轮询时会等到后端启动
-  return startPort
-}
-
 // ── 获取配置中的默认端口 ────────────────────────────────────
-// 先从磁盘配置文件读取（解决「先有鸡还是先有蛋」问题：后端还没启动时 API 不可用）
 function getConfigPortFromFile(): number | null {
   try {
-    // Windows: %APPDATA%\leman-translate\config.json
     const configPath = join(app.getPath('appData'), 'leman-translate', 'config.json')
     if (existsSync(configPath)) {
       const raw = readFileSync(configPath, 'utf-8')
@@ -292,50 +269,50 @@ async function getConfigPort(): Promise<{ server_port: number } | null> {
 // ── 等待后端就绪 ──────────────────────────────────────────────
 let detectedBackendPort = 15387
 
-async function waitForBackendAndCreateWindow(): Promise<void> {
-  // 先创建主窗口显示加载态
-  windowManager.createDashboard()
+async function waitForBackend(): Promise<void> {
+  const startPort = getConfigPortFromFile() ?? 15387
 
-  // 扫描端口（后端可能还没启动，detectBackendPort 会返回配置端口用于后续轮询）
-  const port = await detectBackendPort()
-  if (port) {
-    detectedBackendPort = port
-    writeLog('INFO', `使用后端端口: ${port}（等待后端启动...）`)
-  } else {
-    writeLog('WARN', '端口检测失败，使用默认端口 15387')
-  }
-
-  // 尝试连接检测到的端口
+  // 轮询检查端口，支持小范围偏移探测
   while (healthCheckRetryCount < MAX_HEALTH_RETRIES) {
-    const healthy = await checkBackendHealth(detectedBackendPort)
-    if (healthy) {
-      writeLog('INFO', `健康检查通过 (第 ${healthCheckRetryCount + 1} 次尝试)`)
-      notifyRenderer('backend:ready', { port: detectedBackendPort })
-      return
+    for (let offset = 0; offset <= 3; offset++) {
+      const targetPort = startPort + offset
+      const healthy = await checkBackendHealth(targetPort)
+      if (healthy) {
+        detectedBackendPort = targetPort
+        writeLog('INFO', `健康检查通过，后端运行于端口: ${targetPort} (第 ${healthCheckRetryCount + 1} 次尝试)`)
+        notifyRenderer('backend:ready', { port: detectedBackendPort })
+        return
+      }
     }
+
     healthCheckRetryCount++
-    writeLog('INFO', `等待中... (${healthCheckRetryCount}/${MAX_HEALTH_RETRIES})`)
+    writeLog('INFO', `等待后端启动中... (${healthCheckRetryCount}/${MAX_HEALTH_RETRIES})`)
     await new Promise((resolve) => setTimeout(resolve, 300))
   }
 
-  // 超时
-  const msg = `健康检查超时 (${MAX_HEALTH_RETRIES}s)，后端可能未正常启动`
+  // 超时 — 通知前端引擎启动失败
+  const msg = `健康检查超时 (${(MAX_HEALTH_RETRIES * 300) / 1000}s)，后端未正常响应`
   writeLog('ERROR', msg)
   notifyRenderer('backend:failed', { error: msg, logPath: LOG_FILE })
 }
 
 // ── 停止后端 ──────────────────────────────────────────────────
 function stopBackend(): void {
-  if (backendProcess) {
+  if (backendProcess && backendProcess.pid) {
     isQuitting = true
-    writeLog('INFO', `停止后端进程 (PID: ${backendProcess.pid})`)
+    const pid = backendProcess.pid
+    writeLog('INFO', `停止后端进程 (PID: ${pid})`)
     try {
-      // 先移除 stdio 监听器，防止 kill 后管道断开触发 EPIPE
       backendProcess.stdout?.removeAllListeners()
       backendProcess.stderr?.removeAllListeners()
-      backendProcess.kill('SIGTERM')
+
+      if (process.platform === 'win32') {
+        execSync(`taskkill /pid ${pid} /T /F`, { windowsHide: true })
+      } else {
+        backendProcess.kill('SIGTERM')
+      }
     } catch {
-      // 进程可能已退出
+      // 进程可能已提前退出
     }
     backendProcess = null
   }
@@ -347,13 +324,13 @@ function handleBackendExit(code: number | null): void {
 
   if (code !== 0 && restartCount < MAX_RESTART_COUNT) {
     restartCount++
-    healthCheckRetryCount = 0 // 重置健康检查计数器
-    const delay = restartCount * 3000 // 3s, 6s, 9s
+    healthCheckRetryCount = 0
+    const delay = restartCount * 3000
     writeLog('WARN', `${delay / 1000}秒后自动重启 (第 ${restartCount}/${MAX_RESTART_COUNT} 次)`)
     setTimeout(() => {
       if (!isQuitting) {
         startBackend()
-        waitForBackendAndCreateWindow()
+        waitForBackend()
       }
     }, delay)
   } else if (code !== 0) {
@@ -373,13 +350,16 @@ app.whenReady().then(() => {
     killStaleBackend()
   }
 
-  // 2. 启动后端
+  // 2. 立即创建窗口（单一入口，无重复创建）
+  windowManager.createDashboard()
+
+  // 3. 启动后端（后台异步拉起）
   startBackend()
 
-  // 3. 轮询等待后端就绪
-  waitForBackendAndCreateWindow()
+  // 4. 轮询健康检查，就绪后通知渲染进程
+  waitForBackend()
 
-  // 4. 初始化自动更新
+  // 5. 初始化自动更新
   initAutoUpdater()
 
   app.on('activate', () => {
@@ -409,7 +389,6 @@ ipcMain.handle('window:toggle-always-on-top', () => {
 })
 
 ipcMain.handle('window:toggle-devtools', () => {
-  // 仅开发环境允许手动切换 DevTools
   if (!app.isPackaged) {
     BrowserWindow.getFocusedWindow()?.webContents.toggleDevTools()
   }
@@ -419,14 +398,25 @@ ipcMain.handle('shell:open-external', (_event, url: string) => {
   shell.openExternal(url)
 })
 
-// 新增：打开日志文件
+// 打开日志文件
 ipcMain.handle('backend:open-log', () => {
   shell.openPath(LOG_FILE)
 })
 
-// 新增：获取后端地址（动态端口）
+// 获取后端地址（动态端口）
 ipcMain.handle('backend:get-url', () => {
   return `http://127.0.0.1:${detectedBackendPort}`
+})
+
+// 获取本机机器码
+ipcMain.handle('machine:get-id', () => {
+  try {
+    const id = machineIdSync()
+    return id || 'MAC-UNKNOWN'
+  } catch (e) {
+    console.error('[Main] 获取机器码失败:', e)
+    return 'MAC-UNKNOWN'
+  }
 })
 
 // ── 生命周期 ──────────────────────────────────────────────────

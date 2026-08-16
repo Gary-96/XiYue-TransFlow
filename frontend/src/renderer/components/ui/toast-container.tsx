@@ -1,7 +1,12 @@
 import { useState, useEffect } from 'react'
-import { getToasts } from '@/hooks/use-toast'
-import { cn } from '@/lib/utils'
-import type { ToastItem } from '@/hooks/use-toast'
+import { getToasts } from '../../hooks/use-toast'
+import type { ToastItem } from '../../hooks/use-toast'
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 export function ToastContainer() {
   const [toasts, setToasts] = useState<ToastItem[]>([])
@@ -17,16 +22,15 @@ export function ToastContainer() {
   if (!toasts.length) return null
 
   return (
-    <div className="fixed top-4 right-4 z-[200] flex flex-col gap-2 pointer-events-none">
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[200] flex flex-col gap-2 pointer-events-none max-w-md w-full px-4">
       {toasts.map((t: ToastItem) => (
         <div
           key={t.id}
           className={cn(
-            'rounded-lg border px-4 py-3 shadow-lg min-w-[280px] max-w-[380px] pointer-events-auto',
-            'animate-in slide-in-from-right duration-200',
-            t.variant === 'destructive' && 'border-red-500/20 bg-red-500/10 text-red-400',
-            t.variant === 'success' && 'border-green-500/20 bg-green-500/10 text-green-400',
-            !t.variant || t.variant === 'default' && 'border-border bg-background text-foreground'
+            'rounded-xl border px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.4)] pointer-events-auto animate-in slide-in-from-top duration-200 backdrop-blur-xl bg-[#12122a]/90',
+            t.variant === 'destructive' && 'border-rose-400/40 text-rose-300',
+            t.variant === 'success' && 'border-emerald-400/40 text-emerald-300',
+            !t.variant || t.variant === 'default' && 'border-white/[0.12] text-white/80'
           )}
         >
           {t.title && <div className="text-sm font-semibold">{t.title}</div>}

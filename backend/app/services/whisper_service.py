@@ -1,15 +1,16 @@
+"""
+乐曼同传 — Whisper ASR 服务
+基于 faster-whisper，模型延迟加载，避免阻塞启动
+"""
 import asyncio
 import logging
-import numpy as np
-import torch
-from faster_whisper import WhisperModel
 from typing import Optional
 from app.models.schemas import TranscriptionResult
 
 logger = logging.getLogger(__name__)
 
 # 全局 Whisper 模型实例（延迟加载）
-_model: Optional[WhisperModel] = None
+_model = None
 _model_loaded = False
 
 
@@ -20,7 +21,10 @@ def _load_model():
         return True
     try:
         from config_manager import get_config_manager
+        import numpy as np
+        from faster_whisper import WhisperModel
         import torch
+
         cfg = get_config_manager()
         model_size = cfg.get_whisper_model_size() or "base"
         device_raw = cfg.get_whisper_device() or "auto"
@@ -29,7 +33,13 @@ def _load_model():
         else:
             device = device_raw
         compute_type = "float16" if device == "cuda" else "int8"
+
+        # 适配打包环境：PyInstaller 运行时 sys._MEIPASS 指向解压目录
         model_dir = cfg.get_whisper_model_dir() or None
+        if model_dir and not os.path.isabs(model_dir):
+            # 相对路径，在打包环境下可能不存在，改用绝对路径
+            model_dir = os.path.join(os.path.expanduser("~"), ".cache", "faster-whisper")
+
         logger.info(f"Loading Whisper model: {model_size} on {device}")
         _model = WhisperModel(
             model_size,
@@ -50,6 +60,7 @@ def _ensure_model_loaded() -> bool:
     if not _model_loaded:
         return _load_model()
     return True
+
 
 
 class WhisperService:
@@ -73,6 +84,7 @@ class WhisperService:
                 logger.error("Whisper model not loaded")
                 return None
 
+            import numpy as np
             # int16 PCM → float32
             audio_np = np.frombuffer(audio_data, dtype=np.int16).astype(np.float32) / 32768.0
 
@@ -108,4 +120,5 @@ class WhisperService:
         return {
             "model": "faster-whisper",
             "available": _model_loaded,
+            "lazy": True,
         }

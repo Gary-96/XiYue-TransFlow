@@ -1,5 +1,5 @@
 /**
- * 音频设备配置组件 (Light Theme)
+ * 音频设备配置组件 (Glassmorphism Aurora 深色)
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -88,11 +88,11 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
   }
 
   return (
-    <div className="rounded-xl bg-white border border-slate-200 p-4 space-y-3 shadow-sm">
+    <div className="rounded-xl glass p-4 space-y-3">
       <div className="flex items-center justify-between">
-        <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">{t('settings.audioRoute')}</label>
+        <label className="text-[10px] font-medium text-white/40 uppercase tracking-widest">{t('settings.audioRoute')}</label>
         <button 
-          className="px-2.5 py-1 rounded-md text-xs text-slate-500 hover:text-slate-700 hover:bg-slate-100 border border-slate-200 transition-all disabled:opacity-40" 
+          className="px-2.5 py-1 rounded-md text-xs text-white/50 hover:text-white/80 hover:bg-white/[0.08] border border-white/[0.1] transition-all disabled:opacity-40" 
           onClick={loadAudioDevices} 
           disabled={loadingDevices} 
           title={t('settings.refreshDevices')}
@@ -108,9 +108,9 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
         { key: 'remote_output', label: t('settings.remoteOutput'), devices: outputDevices },
       ].map(({ key, label, devices }) => (
         <div key={key} className="space-y-1.5">
-          <label className="text-xs text-slate-600">{label}</label>
+          <label className="text-xs text-white/60">{label}</label>
           <select
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100 disabled:opacity-50"
+            className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 outline-none focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/20 disabled:opacity-50"
             value={(
               key === 'mic_input' ? micInputId :
               key === 'translation_output' ? translationOutputId :
@@ -136,7 +136,7 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
       ))}
       
       {(inputDevices.filter(d => d.is_pro_device).length > 0 || outputDevices.filter(d => d.is_pro_device).length > 0) && (
-        <div className="text-xs text-violet-600 bg-violet-50 border border-violet-200 rounded-md px-3 py-2">
+        <div className="text-xs text-purple-300 bg-purple-500/15 border border-purple-400/30 rounded-md px-3 py-2">
           ⭐ {t('settings.proDevicesHint')} {inputDevices.filter(d => d.is_pro_device).length + outputDevices.filter(d => d.is_pro_device).length} {t('settings.professionalDevices')}
         </div>
       )}

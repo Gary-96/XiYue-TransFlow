@@ -1,5 +1,5 @@
 /**
- * 语言与音色配置组件 (Light Theme)
+ * 语言与音色配置组件 (Glassmorphism Aurora 深色)
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -141,11 +141,11 @@ export default function LanguageConfig({ onToast }: LanguageConfigProps) {
   return (
     <>
       {/* 🌐 语言对 */}
-      <div className="rounded-xl bg-white border border-slate-200 p-4 space-y-3 shadow-sm">
-        <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">{t('settings.langPairControl')}</label>
+      <div className="rounded-xl glass p-4 space-y-3">
+        <label className="text-[10px] font-medium text-white/40 uppercase tracking-widest">{t('settings.langPairControl')}</label>
         <div className="flex items-center gap-2">
           <select 
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100" 
+            className="flex-1 bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 outline-none focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/20" 
             value={srcLang} 
             onChange={(e) => handleSetLanguage('src', e.target.value)} 
             disabled={saving}
@@ -155,7 +155,7 @@ export default function LanguageConfig({ onToast }: LanguageConfigProps) {
             ))}
           </select>
           <button 
-            className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-blue-600 hover:bg-blue-50 transition-all disabled:opacity-40" 
+            className="w-8 h-8 flex items-center justify-center rounded-lg border border-white/[0.1] bg-white/[0.04] text-blue-300 hover:bg-blue-500/15 transition-all disabled:opacity-40" 
             onClick={handleSwitchLanguage} 
             disabled={saving || loadingVoices} 
             title="🔄"
@@ -163,7 +163,7 @@ export default function LanguageConfig({ onToast }: LanguageConfigProps) {
             ⇄
           </button>
           <select 
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100" 
+            className="flex-1 bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 outline-none focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/20" 
             value={tgtLang} 
             onChange={(e) => handleSetLanguage('tgt', e.target.value)} 
             disabled={saving}
@@ -173,22 +173,22 @@ export default function LanguageConfig({ onToast }: LanguageConfigProps) {
             ))}
           </select>
         </div>
-        <div className="text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-1.5">
+        <div className="text-[11px] text-white/50 bg-white/[0.04] rounded-md px-3 py-1.5">
           {t('settings.currentLang')}: {LANGUAGES[srcLang]?.icon} {LANGUAGES[srcLang]?.label || srcLang} → {LANGUAGES[tgtLang]?.icon} {LANGUAGES[tgtLang]?.label || tgtLang}
         </div>
       </div>
 
       {/* 🔊 音色 */}
-      <div className="rounded-xl bg-white border border-slate-200 p-4 space-y-3 shadow-sm">
-        <label className="text-[10px] font-medium text-slate-500 uppercase tracking-widest">{t('settings.voice')}</label>
+      <div className="rounded-xl glass p-4 space-y-3">
+        <label className="text-[10px] font-medium text-white/40 uppercase tracking-widest">{t('settings.voice')}</label>
         {loadingVoices ? (
-          <div className="flex items-center gap-2 text-slate-500 text-sm">
-            <span className="w-3 h-3 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+          <div className="flex items-center gap-2 text-white/50 text-sm">
+            <span className="w-3 h-3 border-2 border-white/20 border-t-blue-400 rounded-full animate-spin" />
             {t('settings.voiceLoading')}
           </div>
         ) : (
           <select 
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100" 
+            className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 outline-none focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/20" 
             value={selectedVoiceId} 
             onChange={(e) => handleVoiceChange(e.target.value)} 
             disabled={saving}
@@ -215,7 +215,7 @@ export default function LanguageConfig({ onToast }: LanguageConfigProps) {
             )}
           </select>
         )}
-        <div className="text-[11px] text-slate-500 bg-slate-50 rounded-md px-3 py-1.5">
+        <div className="text-[11px] text-white/50 bg-white/[0.04] rounded-md px-3 py-1.5">
           {t('settings.currentLang')}: {voiceOptions.find(v => v.id === selectedVoiceId)?.name || selectedVoiceId}
         </div>
       </div>

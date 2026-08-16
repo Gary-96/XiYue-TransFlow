@@ -4,12 +4,39 @@
 """
 import asyncio
 import logging
+from pathlib import Path
 from typing import Optional, Dict, Any
 
 from app.core.base import TranslatorBackend
 from config_manager import get_config_manager
 
 logger = logging.getLogger(__name__)
+
+# ── SOUL Prompt 缓存（打包环境适配）────────────────────────────
+_SOUL_PROMPT_CACHE: Optional[str] = None
+_SOUL_PROMPT_PATHS = [
+    Path(__file__).resolve().parents[3] / "prompts" / "vietnam-live.SOUL.md",  # 开发环境
+    Path(__file__).resolve().parents[2] / "prompts" / "vietnam-live.SOUL.md",  # 打包后 (PyInstaller)
+]
+
+
+def _load_soul_prompt() -> Optional[str]:
+    """加载 SOUL Prompt，读取一次后缓存到内存"""
+    global _SOUL_PROMPT_CACHE
+    if _SOUL_PROMPT_CACHE is not None:
+        return _SOUL_PROMPT_CACHE
+    for path in _SOUL_PROMPT_PATHS:
+        if path.exists():
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    _SOUL_PROMPT_CACHE = f.read().strip()
+                logger.info(f"SOUL Prompt loaded from {path}")
+                return _SOUL_PROMPT_CACHE
+            except Exception as e:
+                logger.warning(f"Failed to load SOUL Prompt from {path}: {e}")
+                continue
+    logger.warning("SOUL Prompt file not found, using fallback")
+    return None
 
 
 class BaseTranslator(TranslatorBackend):
@@ -168,15 +195,29 @@ class OpenAICompatibleTranslator(BaseTranslator):
     
     @staticmethod
     def _build_prompt(text: str, source_lang: str, target_lang: str) -> str:
-        """构建翻译 prompt"""
+        """构建翻译 prompt - 中越/越中场景优先使用 SOUL Prompt"""
         from app.services.language_manager import TRANSLATION_PROMPTS
         src_s, tgt_s = source_lang.lower(), target_lang.lower()
         key = f"{src_s}_to_{tgt_s}"
-        
+
+        # 越南语 → 中文场景优先使用 SOUL Prompt
+        if src_s == "vi" and tgt_s == "zh":
+            soul = _load_soul_prompt()
+            if soul:
+                return f"{soul}\n\n越南语原文: {text}\n\n中文译文:"
+
+        # 中文 → 越南语场景也尝试使用 SOUL（如果有的话）
+        if src_s == "zh" and tgt_s == "vi":
+            soul = _load_soul_prompt()
+            if soul:
+                # 提取 SOUL 中的核心规则，拼接中文→越南语指令
+                return f"{soul}\n\n请将以下中文翻译成越南语直播口语：{text}"
+
+        # 其他语言对使用原有 Prompt 模板
         if key in TRANSLATION_PROMPTS:
             return TRANSLATION_PROMPTS[key].format(text=text)
-        
-        # Fallback
+
+        # Fallback: 通用翻译指令
         lang_map = {"zh": "中文", "vi": "越南语", "en": "英语", "ja": "日语", "ko": "韩语", "th": "泰语"}
         source_name = lang_map.get(src_s, src_s)
         target_name = lang_map.get(tgt_s, tgt_s)

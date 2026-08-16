@@ -1,5 +1,5 @@
 /**
- * WhisperConfig — Whisper 语音识别模型配置组件 (Light Theme)
+ * Whisper 语音识别配置组件 (Glassmorphism Aurora 深色)
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -11,51 +11,52 @@ interface WhisperConfigProps {
 }
 
 const WHISPER_SIZES = [
-  { value: 'tiny', label: 'Tiny (75MB, 极速)' },
-  { value: 'base', label: 'Base (145MB, 推荐)' },
-  { value: 'small', label: 'Small (488MB, 均衡)' },
-  { value: 'medium', label: 'Medium (1.5GB, 高精度)' },
-  { value: 'large-v2', label: 'Large-v2 (2.9GB, 最高精度)' },
-  { value: 'large-v3', label: 'Large-v3 (2.9GB, 最新版)' },
-] as const
+  { value: 'tiny', label: 'Tiny (75MB)' },
+  { value: 'base', label: 'Base (145MB)' },
+  { value: 'small', label: 'Small (483MB)' },
+  { value: 'medium', label: 'Medium (1.5GB)' },
+  { value: 'large-v2', label: 'Large v2 (2.9GB)' },
+  { value: 'large-v3', label: 'Large v3 (2.9GB)' },
+]
 
 const WHISPER_DEVICES = [
-  { value: 'auto', label: '自动 (优先 GPU)' },
-  { value: 'cuda', label: 'CUDA (NVIDIA GPU)' },
-  { value: 'cpu', label: 'CPU (通用)' },
-] as const
+  { value: 'auto', label: '自动检测' },
+  { value: 'cuda', label: 'CUDA (GPU)' },
+  { value: 'cpu', label: 'CPU' },
+]
 
 export default function WhisperConfig({ onToast }: WhisperConfigProps) {
   const { t } = useTranslation()
-  const [modelSize, setModelSize] = useState('base')
-  const [device, setDevice] = useState('auto')
-  const [modelDir, setModelDir] = useState('')
+  const [modelSize, setModelSize] = useState<string>('base')
+  const [device, setDevice] = useState<string>('cuda')
+  const [modelDir, setModelDir] = useState<string>('')
+  const [loaded, setLoaded] = useState<boolean>(false)
+  const [modelLoaded, setModelLoaded] = useState<boolean>(false)
   const [saving, setSaving] = useState(false)
-  const [loaded, setLoaded] = useState(false)
-  const [modelInfo, setModelInfo] = useState<{ available: boolean; model: string } | null>(null)
 
   const loadConfig = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/api/config`)
       const data = await res.json()
       if (data.status === 'success') {
-        const cfg = data.config || {}
-        setModelSize(cfg.whisper_model_size || 'base')
-        setDevice(cfg.whisper_device || 'auto')
-        setModelDir(cfg.whisper_model_dir || '')
-        setLoaded(true)
+        setModelSize(data.config.whisper_model_size || 'base')
+        setDevice(data.config.whisper_device || 'cuda')
+        setModelDir(data.config.whisper_model_dir || '')
       }
+      setLoaded(true)
     } catch {
-      onToast?.({ type: 'error', msg: t('dashboard.toastConnectFail') })
+      setLoaded(true)
     }
-  }, [t, onToast])
+  }, [])
 
   const loadHealth = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE}/health`)
       const data = await res.json()
-      setModelInfo(data.device ? { available: data.device !== 'not_loaded', model: String(data.device) } : null)
-    } catch { /* ignore */ }
+      setModelLoaded(data.device && data.device !== 'not_loaded')
+    } catch {
+      setModelLoaded(false)
+    }
   }, [])
 
   useEffect(() => { loadConfig(); loadHealth() }, [loadConfig, loadHealth])
@@ -69,18 +70,17 @@ export default function WhisperConfig({ onToast }: WhisperConfigProps) {
         body: JSON.stringify({
           whisper_model_size: modelSize,
           whisper_device: device,
-          whisper_model_dir: modelDir.trim(),
+          whisper_model_dir: modelDir,
         }),
       })
       const data = await res.json()
       if (data.status === 'success') {
         onToast?.({ type: 'success', msg: '✅ Whisper 配置已保存（模型重启后生效）' })
-        await loadHealth()
       } else {
-        onToast?.({ type: 'error', msg: data.message || '保存失败' })
+        onToast?.({ type: 'error', msg: data.message || t('settings.saveOnly') })
       }
     } catch {
-      onToast?.({ type: 'error', msg: '网络错误' })
+      onToast?.({ type: 'error', msg: t('settings.netError') })
     } finally {
       setSaving(false)
     }
@@ -89,33 +89,29 @@ export default function WhisperConfig({ onToast }: WhisperConfigProps) {
   if (!loaded) return null
 
   return (
-    <div className="rounded-xl bg-white border border-slate-200 p-4 space-y-3 shadow-sm">
+    <div className="rounded-xl glass p-4 space-y-3">
       {/* 标题行 */}
-      <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-        <span className="text-base">🎙️</span>
-        <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-          Whisper 语音识别
-        </h4>
-        {modelInfo && (
-          <span className={`ml-auto text-[10px] px-2 py-0.5 rounded-full ${
-            modelInfo.available
-              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-              : 'bg-slate-100 text-slate-500'
-          }`}>
-            {modelInfo.available ? '已加载' : '未加载'}
-          </span>
-        )}
+      <div className="flex items-center justify-between">
+        <label className="text-[10px] font-medium text-white/40 uppercase tracking-widest">🎙️ {t('settings.whisperTitle')}</label>
+        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${
+          modelLoaded
+            ? 'bg-emerald-500/15 border-emerald-400/30 text-emerald-300'
+            : 'bg-white/[0.05] border-white/[0.1] text-white/40'
+        }`}>
+          {modelLoaded ? t('settings.modelLoaded') : t('settings.modelNotLoaded')}
+        </span>
       </div>
 
       {/* 模型大小 */}
       <div className="space-y-1.5">
-        <label className="text-[10px] text-slate-500 uppercase tracking-wider">模型大小</label>
+        <label className="text-xs text-white/60">{t('settings.modelSize')}</label>
         <select
-          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+          className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 outline-none focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/20"
           value={modelSize}
           onChange={(e) => setModelSize(e.target.value)}
+          disabled={saving}
         >
-          {WHISPER_SIZES.map((s) => (
+          {WHISPER_SIZES.map(s => (
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
@@ -123,45 +119,45 @@ export default function WhisperConfig({ onToast }: WhisperConfigProps) {
 
       {/* 运行设备 */}
       <div className="space-y-1.5">
-        <label className="text-[10px] text-slate-500 uppercase tracking-wider">运行设备</label>
+        <label className="text-xs text-white/60">{t('settings.runDevice')}</label>
         <select
-          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+          className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 outline-none focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/20"
           value={device}
           onChange={(e) => setDevice(e.target.value)}
+          disabled={saving}
         >
-          {WHISPER_DEVICES.map((d) => (
+          {WHISPER_DEVICES.map(d => (
             <option key={d.value} value={d.value}>{d.label}</option>
           ))}
         </select>
       </div>
 
-      {/* 模型下载目录 */}
+      {/* 模型目录 */}
       <div className="space-y-1.5">
-        <label className="text-[10px] text-slate-500 uppercase tracking-wider">
-          模型下载目录
-          <span className="text-slate-400 ml-1">（留空使用默认缓存路径）</span>
-        </label>
+        <label className="text-xs text-white/60">{t('settings.modelDir')}</label>
         <input
-          className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none placeholder-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100 font-mono"
           type="text"
-          placeholder="例: D:\models\faster-whisper"
+          className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 font-mono outline-none placeholder-white/30 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
+          placeholder="留空使用默认缓存目录"
           value={modelDir}
           onChange={(e) => setModelDir(e.target.value)}
+          disabled={saving}
+          spellCheck={false}
         />
       </div>
 
       {/* 保存按钮 */}
       <button
+        className="w-full py-2 rounded-lg border border-blue-400/40 bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 font-medium text-sm transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98]"
         onClick={handleSave}
         disabled={saving}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40"
       >
-        {saving ? '⏳ 保存中...' : '💾 保存 Whisper 配置'}
+        {saving ? t('settings.savingLocal') : '💾 保存 Whisper 配置'}
       </button>
 
-      {/* 提示 */}
-      <p className="text-[9px] text-slate-400 leading-relaxed">
-        修改模型大小或设备后需要重启应用才能生效。更大的模型提供更高精度但占用更多显存/内存。
+      {/* 底部提示 */}
+      <p className="text-[9px] text-white/30 leading-relaxed">
+        {t('settings.whisperHint')}
       </p>
     </div>
   )

@@ -89,7 +89,7 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "local_cuda_model_path": "",  # CUDA 本地模型文件路径（.gguf）
     "local_cuda_download_url": "",  # CUDA 模型下载链接
     # ── 服务端口配置 ─────────────────────────────────────
-    "server_port": 15387,        # API 服务端口（自动检测冲突）
+    "server_port": 15387,        # API 服务端口（固定，不自动偏移）
 }
 
 # ── 服务商元数据 ──────────────────────────────────────────
@@ -180,12 +180,8 @@ class ConfigManager:
 
     def _sync_env(self) -> None:
         """把当前配置同步到环境变量，供 translation_service 与 collector 读取"""
-        for provider, meta in PROVIDER_META.items():
-            key = self._config.get("keys", {}).get(provider, "")
-            if key:
-                os.environ[meta["env_key"]] = key
-
-        # 代理设置同步到环境变量
+        # 不再使用 os.environ 存储敏感 Key，改用内存属性
+        # 仅同步非敏感配置到环境变量
         proxy = self._config.get("proxy_url", "")
         if proxy:
             os.environ["HTTP_PROXY"] = proxy

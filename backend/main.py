@@ -18,23 +18,26 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用生命周期管理"""
+    """应用生命周期管理 — 仅初始化轻量服务，collector 懒加载"""
     logger.info("启动乐曼同传 v2 (新架构)...")
-    
-    # 初始化服务
+
+    # ── 轻量服务（无重型依赖，快速初始化） ──────────────────────
     from app.services.whisper_service import WhisperService
     from app.services.translation_service import TranslationService
     from app.services.tts_service import tts_service
-    from collectors.manager import create_collector_manager
-    
+
+    # Whisper / TTS / Translation 都是轻量实例化（模型延迟加载）
     app.state.whisper_service = WhisperService()
     app.state.translation_service = TranslationService()
-    app.state.collector_manager = create_collector_manager()
+    app.state.tts_service = tts_service
     app.state.config_manager = get_config_manager()
-    
-    logger.info("服务初始化完成")
+
+    # collector_manager 不在此初始化 —— 推迟到用户首次切换平台时按需创建
+    app.state.collector_manager = None
+
+    logger.info("FastAPI 已就绪 (轻量初始化)")
     yield
-    
+
     logger.info("关闭乐曼同传...")
     if hasattr(app.state, 'collector_manager') and app.state.collector_manager:
         await app.state.collector_manager.stop_all_platforms()
@@ -76,24 +79,25 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    
+    import sys
+    import socket
+
     # 固定端口 15387，不自动递增
     PORT = 15387
     HOST = "127.0.0.1"
-    
+
     # 检查端口是否被占用
-    import socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         sock.bind((HOST, PORT))
         sock.close()
-        print(f"✅ 端口 {PORT} 可用")
+        print(f"[OK] Port {PORT} is available")
     except OSError as e:
-        print(f"❌ 错误: 端口 {PORT} 被占用 ({e})")
-        print(f"   请执行以下命令清理进程:")
-        print(f"   netstat -ano | findstr :{PORT}")
-        print(f"   taskkill /F /PID <PID>")
-        exit(1)
-    
-    print(f"🚀 启动乐曼同传后端 v0.2.0 于 http://{HOST}:{PORT}")
+        print(f"[ERROR] Port {PORT} is in use ({e})")
+        print(f"  Please run:")
+        print(f"  netstat -ano | findstr :{PORT}")
+        print(f"  taskkill /F /PID <PID>")
+        sys.exit(1)
+
+    print(f"[INFO] Starting Leman Translate v0.2.0 on http://{HOST}:{PORT}")
     uvicorn.run(app, host=HOST, port=PORT, reload=False)

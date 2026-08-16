@@ -1,5 +1,5 @@
 /**
- * API Key 与模型配置组件 — Tab 切换版 (Light Theme)
+ * API Key 与模型配置组件 — Tab 切换版 (Glassmorphism Aurora 深色)
  */
 import { useState, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -148,9 +148,9 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
 
   if (loading) {
     return (
-      <div className="rounded-xl bg-white border border-slate-200 p-4 flex items-center justify-center min-h-[120px] shadow-sm">
-        <div className="flex items-center gap-3 text-slate-500 text-sm">
-          <span className="w-4 h-4 border-2 border-slate-300 border-t-blue-500 rounded-full animate-spin" />
+      <div className="rounded-xl glass p-4 flex items-center justify-center min-h-[120px]">
+        <div className="flex items-center gap-3 text-white/50 text-sm">
+          <span className="w-4 h-4 border-2 border-white/20 border-t-blue-400 rounded-full animate-spin" />
           {t('settings.loadingConfig')}
         </div>
       </div>
@@ -158,9 +158,9 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
   }
 
   return (
-    <div className="rounded-xl bg-white border border-slate-200 overflow-hidden shadow-sm">
+    <div className="rounded-xl glass overflow-hidden">
       {/* ── Tab 导航栏 ──────────────────────────────────── */}
-      <div className="flex border-b border-slate-200 bg-slate-50">
+      <div className="flex border-b border-white/[0.08] bg-white/[0.03]">
         {providerList.map(p => {
           const pMeta = PROVIDER_META[p]
           const isActive = selectedProvider === p
@@ -170,14 +170,14 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
               onClick={() => handleTabChange(p as ProviderKey)}
               className={`flex-1 flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium transition-all relative ${
                 isActive
-                  ? 'text-blue-700 bg-white'
-                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100'
+                  ? 'text-blue-200 bg-white/[0.06]'
+                  : 'text-white/50 hover:text-white/80 hover:bg-white/[0.04]'
               }`}
             >
               <span>{pMeta?.icon || '🌐'}</span>
               <span className="truncate">{pMeta?.name || p}</span>
               {isActive && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500" />
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-400 to-purple-400" />
               )}
             </button>
           )
@@ -186,22 +186,22 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
 
       {/* ── 当前 Tab 内容区 ─────────────────────────────── */}
       <div className="p-4 space-y-3">
-        <div className="flex items-center gap-2 pb-3 border-b border-slate-100">
+        <div className="flex items-center gap-2 pb-3 border-b border-white/[0.08]">
           <span className="text-lg">{meta.icon}</span>
           <div className="flex-1">
-            <div className="text-sm font-semibold text-slate-800">{meta.name}</div>
+            <div className="text-sm font-semibold text-white/90">{meta.name}</div>
             <a
               href={meta.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-[10px] text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1"
+              className="text-[10px] text-white/40 hover:text-blue-300 transition-colors flex items-center gap-1"
             >
               <span>🔗</span>
               {t('settings.getApiKey')}
             </a>
           </div>
           {config?.current_provider === selectedProvider && (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium border border-blue-200">
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 font-medium border border-blue-400/30">
               {t('settings.current')}
             </span>
           )}
@@ -209,11 +209,11 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
 
         {/* API Key */}
         <div className="space-y-1.5">
-          <label className="text-[10px] text-slate-500 uppercase tracking-wider">{t('settings.apiKey')}</label>
+          <label className="text-[10px] text-white/40 uppercase tracking-wider">{t('settings.apiKey')}</label>
           <div className="flex gap-2">
             <input
               type={visibleKey ? 'text' : 'password'}
-              className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 font-mono outline-none placeholder-slate-400 focus:border-blue-400 focus:ring-1 focus:ring-blue-100"
+              className="flex-1 bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 font-mono outline-none placeholder-white/30 focus:border-blue-400/60 focus:ring-2 focus:ring-blue-500/20"
               placeholder={`${t('settings.apiKeyPlaceholder')} (${meta.name})`}
               value={editKeys[selectedProvider] || ''}
               onChange={(e) => setEditKeys(prev => ({ ...prev, [selectedProvider]: e.target.value }))}
@@ -222,7 +222,7 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
             />
             <button
               type="button"
-              className="px-3 rounded-lg border border-slate-200 bg-slate-50 text-slate-500 hover:text-slate-700 transition-all text-sm"
+              className="px-3 rounded-lg border border-white/[0.1] bg-white/[0.04] text-white/50 hover:text-white/80 transition-all text-sm"
               onClick={toggleKeyVisible}
               title={visibleKey ? t('settings.toggleHide') : t('settings.toggleShow')}
             >
@@ -234,10 +234,10 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
         {/* 自定义端点 */}
         {showEndpoint && (
           <div className="space-y-1.5">
-            <label className="text-[10px] text-slate-500 uppercase tracking-wider">{t('settings.endpoint')}</label>
+            <label className="text-[10px] text-white/40 uppercase tracking-wider">{t('settings.endpoint')}</label>
             <input
               type="text"
-              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 font-mono outline-none placeholder-slate-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-100"
+              className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 font-mono outline-none placeholder-white/30 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
               placeholder={meta.defaultEndpoint || t('settings.endpointPlaceholder')}
               value={editEndpoints[selectedProvider] || ''}
               onChange={(e) => setEditEndpoints(prev => ({ ...prev, [selectedProvider]: e.target.value }))}
@@ -248,10 +248,10 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
 
         {/* 模型名 */}
         <div className="space-y-1.5">
-          <label className="text-[10px] text-slate-500 uppercase tracking-wider">{t('settings.modelName')}</label>
+          <label className="text-[10px] text-white/40 uppercase tracking-wider">{t('settings.modelName')}</label>
           <input
             type="text"
-            className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 outline-none placeholder-slate-400 focus:border-violet-400 focus:ring-1 focus:ring-violet-100"
+            className="w-full bg-white/[0.04] border border-white/[0.1] rounded-lg px-3 py-2 text-sm text-white/90 outline-none placeholder-white/30 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
             placeholder={t('settings.modelPlaceholder')}
             value={editModels[selectedProvider] || ''}
             onChange={(e) => setEditModels(prev => ({ ...prev, [selectedProvider]: e.target.value }))}
@@ -265,10 +265,10 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
             type="button"
             onClick={handleTestConnection}
             disabled={testStatus === 'testing' || saving}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 hover:text-slate-800 hover:border-slate-300 transition-all text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.1] bg-white/[0.04] text-white/60 hover:text-white/90 hover:border-white/[0.2] transition-all text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {testStatus === 'testing' ? (
-              <><span className="w-3 h-3 border-2 border-slate-400 border-t-blue-500 rounded-full animate-spin" />{t('settings.testingConnection')}</>
+              <><span className="w-3 h-3 border-2 border-white/30 border-t-blue-400 rounded-full animate-spin" />{t('settings.testingConnection')}</>
             ) : testStatus === 'success' ? (
               <><span>✅</span>{t('settings.connectionSuccess')}</>
             ) : testStatus === 'error' ? (
@@ -278,7 +278,7 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
             )}
           </button>
           {testStatus === 'success' && (
-            <span className="text-xs text-emerald-600 animate-[slide-in-up_0.2s_ease]">
+            <span className="text-xs text-emerald-300 animate-[slide-in-up_0.2s_ease]">
               {testMessage}
             </span>
           )}
@@ -286,27 +286,27 @@ export default function ApiKeysConfig({ onToast }: ApiKeysConfigProps) {
 
         {/* 配置文件路径 */}
         {configPath && (
-          <div className="text-[10px] text-slate-400 bg-slate-50 rounded-md px-3 py-2">
-            📁 {t('settings.configPath')}: <code className="text-violet-600 font-mono break-all">{configPath}</code>
+          <div className="text-[10px] text-white/40 bg-white/[0.04] rounded-md px-3 py-2">
+            📁 {t('settings.configPath')}: <code className="text-purple-300 font-mono break-all">{configPath}</code>
           </div>
         )}
       </div>
 
       {/* ── 底部操作按钮 ────────────────────────────────── */}
-      <div className="flex gap-2 p-4 pt-0 border-t border-slate-100">
+      <div className="flex gap-2 p-4 pt-0 border-t border-white/[0.08]">
         <button
-          className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-200 disabled:text-slate-400 text-white text-sm font-medium py-2 rounded-lg transition-all active:scale-[0.98] disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          className="flex-1 btn-grad disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-medium py-2 rounded-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
           onClick={() => handleSave(true)}
           disabled={saving || testStatus === 'testing'}
         >
           {saving ? (
-            <><span className="w-3 h-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />{t('settings.saving')}</>
+            <><span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t('settings.saving')}</>
           ) : (
             <>💾 {t('settings.saveTest')}</>
           )}
         </button>
         <button
-          className="flex-1 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 disabled:text-slate-400 text-slate-600 border border-slate-200 text-sm font-medium py-2 rounded-lg transition-all active:scale-[0.98] disabled:cursor-not-allowed"
+          className="flex-1 bg-white/[0.06] hover:bg-white/[0.1] disabled:bg-white/[0.03] disabled:text-white/30 text-white/60 border border-white/[0.1] text-sm font-medium py-2 rounded-lg transition-all active:scale-[0.98] disabled:cursor-not-allowed"
           onClick={() => handleSave(false)}
           disabled={saving}
         >

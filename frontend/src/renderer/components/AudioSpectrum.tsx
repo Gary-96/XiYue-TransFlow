@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 /**
- * Voicebox 风格 — 极细动态立柱频谱
+ * Voicebox 风格 — 极细动态立柱频谱 (Light Theme 适配)
  * — 20 频段，单柱 w-1，间距 gap-1
- * — 低频靛蓝 → 高频荧光绿的渐变配色
+ * — 蓝色系渐变：深蓝 → 亮蓝 → 青色
  * — Peak Hold + Smooth Decay
  */
 
@@ -74,18 +74,18 @@ export default function AudioSpectrum({
       const barH = Math.max(0, sv * H * 0.9)
       const peakH = Math.max(0, peakRef.current[i] * H * 0.9)
 
-      // 渐变：低频靛蓝 → 中紫 → 高荧光绿
+      // 渐变：深蓝 → 蓝紫 → 紫青 (Glassmorphism Aurora)
       const freqRatio = i / (barCount - 1) // 0=低, 1=高
       const grad = ctx.createLinearGradient(0, H, 0, H - barH)
       if (freqRatio < 0.33) {
-        grad.addColorStop(0, '#4f46e5')  // 靛蓝
-        grad.addColorStop(1, '#6366f1')  // 浅靛
+        grad.addColorStop(0, '#2563eb')  // 深蓝
+        grad.addColorStop(1, '#60a5fa')  // 亮蓝
       } else if (freqRatio < 0.66) {
-        grad.addColorStop(0, '#7c3aed')  // 紫
-        grad.addColorStop(1, '#a855f7')  // 亮紫
+        grad.addColorStop(0, '#6366f1')  // 蓝紫
+        grad.addColorStop(1, '#a78bfa')  // 亮紫
       } else {
-        grad.addColorStop(0, '#059669')  // 深绿
-        grad.addColorStop(1, '#10b981')  // 荧光绿
+        grad.addColorStop(0, '#8b5cf6')  // 紫
+        grad.addColorStop(1, '#22d3ee')  // 青
       }
 
       // 主柱
@@ -106,7 +106,7 @@ export default function AudioSpectrum({
       // 峰值亮点
       if (peakH > 2) {
         const py = H - peakH
-        ctx.fillStyle = 'rgba(255,255,255,0.8)'
+        ctx.fillStyle = 'rgba(255,255,255,0.9)'
         ctx.fillRect(x, py - 1, barW, 1.5)
       }
     }
@@ -137,7 +137,7 @@ export default function AudioSpectrum({
   return (
     <div
       ref={containerRef}
-      className={`rounded-lg overflow-hidden bg-zinc-900/40 border border-zinc-800/50 ${className}`}
+      className={`rounded-lg overflow-hidden bg-white/[0.04] border border-white/[0.08] ${className}`}
       style={{ width: '100%', height: `${height}px` }}
     >
       <canvas

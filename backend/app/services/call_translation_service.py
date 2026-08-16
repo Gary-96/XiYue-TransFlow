@@ -324,8 +324,10 @@ class CallTranslationService:
             if not self.translation_service or not self.language_manager:
                 continue
             try:
-                src_lang = self.language_manager.src_lang
-                tgt_lang = self.language_manager.tgt_lang
+                # 修复：使用 get_current_pair() 获取语言对
+                pair = self.language_manager.get_current_pair()
+                src_lang = pair.src_lang
+                tgt_lang = pair.tgt_lang
 
                 translation = await self.translation_service.translate(
                     text, src_lang=src_lang, tgt_lang=tgt_lang

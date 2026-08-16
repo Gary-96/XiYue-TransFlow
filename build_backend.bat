@@ -3,6 +3,7 @@ chcp 65001 >nul
 echo ========================================
 echo   Leman Translate - Backend Build
 echo   Output: output\backend_engine
+echo   注意: server/ 云端授权服务已排除在打包之外
 echo ========================================
 echo.
 
@@ -13,6 +14,7 @@ set PROJ_DIR=D:\001源代码\中越直播小助手
 set BACKEND_DIR=%PROJ_DIR%\backend
 set STATIC_DIR=%BACKEND_DIR%\static
 set PROMPTS_DIR=%BACKEND_DIR%\prompts
+set SERVER_DIR=%PROJ_DIR%\server
 
 echo [1/4] Creating output directories...
 if not exist "output\backend_engine" mkdir "output\backend_engine"
@@ -28,6 +30,7 @@ echo [OK] Cleaned
 echo.
 
 echo [3/4] PyInstaller packaging (5-10 minutes)...
+echo    正在排除 server/ 目录（云端授权服务）...
 "%PY%" -m PyInstaller ^
     --noconfirm ^
     --clean ^
@@ -38,6 +41,8 @@ echo [3/4] PyInstaller packaging (5-10 minutes)...
     --workpath "output\build_backend\backend_engine" ^
     --add-data "%STATIC_DIR%;static" ^
     --add-data "%PROMPTS_DIR%;prompts" ^
+    --exclude-module server ^
+    --exclude-module cloud_auth ^
     --hidden-import numpy ^
     --hidden-import numpy.core ^
     --hidden-import torch ^
@@ -86,7 +91,7 @@ echo [3/4] PyInstaller packaging (5-10 minutes)...
     --collect-all bs4 ^
     --collect-all lxml ^
     --collect-all blackboxprotobuf ^
-    "%BACKEND_DIR%\\main_manager.py"
+    "%BACKEND_DIR%\\main.py"
 
 if errorlevel 1 (
     echo [X] PyInstaller failed
@@ -106,8 +111,10 @@ if exist "output\backend_engine\backend_engine.exe" (
     exit /b 1
 )
 echo.
+
 echo ========================================
 echo   [OK] Backend build complete!
 echo   Location: output\backend_engine\
+echo   Note: server/ (cloud auth) is NOT included
 echo ========================================
 pause
