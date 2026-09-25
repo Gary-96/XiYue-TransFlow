@@ -75,8 +75,6 @@ if (process.contextIsolated) {
     console.error('Preload contextBridge 挂载失败:', error)
   }
 } else {
-  // @ts-ignore
-  window.electronAPI = electronAPI
-  // @ts-ignore
-  window.electron = electronAPI
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (window as any).electronAPI = electronAPI
 }

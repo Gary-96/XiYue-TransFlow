@@ -43,7 +43,7 @@ export default function LogPanel({ maxLines = 500 }: LogPanelProps) {
 
     ws.onopen = () => {
       setWsConnected(true)
-      console.log('[LogPanel] WebSocket 已连接')
+      console.warn('[LogPanel] WebSocket 已连接')
     }
 
     ws.onmessage = (event) => {
@@ -62,7 +62,7 @@ export default function LogPanel({ maxLines = 500 }: LogPanelProps) {
       setWsConnected(false)
       // 3 秒后重连
       reconnectTimer.current = setTimeout(() => {
-        console.log('[LogPanel] 尝试重连...')
+        console.warn('[LogPanel] 尝试重连...')
       }, 3000)
     }
 

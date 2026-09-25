@@ -71,8 +71,8 @@ export default function ActivateModal({ open, onClose, onActivated }: ActivateMo
       } else {
         setError(result.message || '激活失败，请检查激活码')
       }
-    } catch (e: any) {
-      setError(e.message || '网络连接失败，请检查云端服务')
+    } catch (e: unknown) {
+      setError((e as Error).message || '网络连接失败，请检查云端服务')
     } finally {
       setLoading(false)
     }

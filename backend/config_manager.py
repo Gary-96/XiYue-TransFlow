@@ -133,6 +133,7 @@ class ConfigManager:
             return
         self._initialized = True
         self._config: Dict[str, Any] = {}
+        self._runtime_keys: Dict[str, str] = {}  # 内存中存储敏感 Key，避免泄露到环境变量
         self._load()
 
     # ── 持久化 ───────────────────────────────────────────
@@ -312,12 +313,11 @@ class ConfigManager:
         return self._save()
 
     def set_api_key(self, provider: str, api_key: str) -> bool:
-        """设置指定服务商的 API Key"""
+        """设置指定服务商的 API Key（仅存储于内存，不再同步到环境变量）"""
         if provider not in PROVIDER_META:
             return False
         self._config.setdefault("keys", {})[provider] = api_key.strip()
-        meta = PROVIDER_META[provider]
-        os.environ[meta["env_key"]] = api_key.strip()
+        self._runtime_keys[provider] = api_key.strip()  # 内存存储
         return self._save()
 
     def set_endpoint(self, provider: str, endpoint: str) -> bool:

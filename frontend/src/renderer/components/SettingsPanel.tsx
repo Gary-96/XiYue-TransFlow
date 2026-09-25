@@ -3,7 +3,6 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
 import LanguageConfig from './settings/LanguageConfig'
 import AudioDevicesConfig from './settings/AudioDevicesConfig'
 import ApiKeysConfig from './settings/ApiKeysConfig'
@@ -16,7 +15,6 @@ interface SettingsPanelProps {
 }
 
 export default function SettingsPanel({ activeSection }: SettingsPanelProps) {
-  const { t } = useTranslation()
   const [toast, setToast] = useState<Toast | null>(null)
 
   useEffect(() => {

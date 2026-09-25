@@ -73,7 +73,7 @@ class WindowManager {
     win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
       const levelStr = ['LOG', 'WARN', 'ERROR'][level] || 'LOG'
       try {
-        console.log(`[Renderer ${levelStr}] ${message} (${sourceId}:${line})`)
+        console.warn(`[Renderer ${levelStr}] ${message} (${sourceId}:${line})`)
       } catch { /* EPIPE guard */ }
     })
 

@@ -17,7 +17,7 @@ process.on('unhandledRejection', (reason: unknown) => {
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'path'
 import { spawn, execSync, ChildProcess } from 'child_process'
-import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync, appendFileSync } from 'fs'
 import { windowManager } from './windowManager'
 import { initAutoUpdater } from './autoUpdater'
 import net from 'net'
@@ -56,7 +56,7 @@ function writeLog(level: string, message: string): void {
     if (level === 'ERROR') {
       console.error(line.trimEnd())
     } else {
-      console.log(line.trimEnd())
+      console.warn(line.trimEnd())
     }
   } catch {
     // console.error/log 可能因 stdout 管道断开抛 EPIPE，忽略
@@ -221,56 +221,12 @@ async function checkBackendHealth(port: number): Promise<boolean> {
   })
 }
 
-// ── 获取配置中的默认端口 ────────────────────────────────────
-function getConfigPortFromFile(): number | null {
-  try {
-    const configPath = join(app.getPath('appData'), 'leman-translate', 'config.json')
-    if (existsSync(configPath)) {
-      const raw = readFileSync(configPath, 'utf-8')
-      const json = JSON.parse(raw)
-      if (json?.server_port && typeof json.server_port === 'number') {
-        return json.server_port
-      }
-    }
-  } catch {
-    // 配置文件读取失败，忽略
-  }
-  return null
-}
-
-// ── 获取配置中的默认端口（从后端 API 读取，后端已启动时可用）────────
-async function getConfigPort(): Promise<{ server_port: number } | null> {
-  try {
-    const http = await import('http')
-    return new Promise((resolve) => {
-      const req = http.get('http://127.0.0.1:15387/api/config', (res) => {
-        let data = ''
-        res.on('data', (chunk) => (data += chunk))
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data)
-            resolve(json?.data ?? null)
-          } catch {
-            resolve(null)
-          }
-        })
-      })
-      req.on('error', () => resolve(null))
-      req.setTimeout(2000, () => {
-        req.destroy()
-        resolve(null)
-      })
-    })
-  } catch {
-    return null
-  }
-}
-
 // ── 等待后端就绪 ──────────────────────────────────────────────
 let detectedBackendPort = 15387
+const BACKEND_PORT = 15387
 
 async function waitForBackend(): Promise<void> {
-  const startPort = getConfigPortFromFile() ?? 15387
+  const startPort = BACKEND_PORT
 
   // 轮询检查端口，支持小范围偏移探测
   while (healthCheckRetryCount < MAX_HEALTH_RETRIES) {

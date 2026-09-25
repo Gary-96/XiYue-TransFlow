@@ -1,15 +1,9 @@
-import { useState } from 'react'
-import { 
-  MessageSquareQuote, 
-  Subtitles, 
-  Mic, 
-  Settings, 
+import {
+  MessageSquareQuote,
+  Subtitles,
+  Mic,
+  Settings,
   Info,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
-  Download,
-  ChevronDown,
 } from 'lucide-react'
 
 interface NavItem {
@@ -35,8 +29,6 @@ interface SidebarProps {
   backendFailed: boolean
   backendPort: number
   appVersion: string
-  updateStatus: string
-  onCheckUpdate: () => void
 }
 
 export default function Sidebar({
@@ -48,31 +40,26 @@ export default function Sidebar({
   backendFailed,
   backendPort,
   appVersion,
-  updateStatus,
-  onCheckUpdate,
 }: SidebarProps) {
-  const updateButtonText = (() => {
-    switch (updateStatus) {
-      case 'checking':    return '检查中...'
-      case 'available':   return '更新可用'
-      case 'downloading': return '下载中...'
-      case 'downloaded':  return '更新就绪'
-      case 'error':       return '更新失败'
-      default:            return '检查更新'
-    }
-  })()
-
-  const updateDisabled = updateStatus === 'checking' || updateStatus === 'downloading'
-  const showUpdateButton = updateStatus !== 'idle' && updateStatus !== 'not-available'
-
   return (
-    <aside className="w-52 flex-shrink-0 flex flex-col bg-white/[0.03] backdrop-blur-xl border-r border-white/[0.08] select-none h-full">
+    <aside className="w-60 flex flex-col justify-between p-4 bg-white/70 backdrop-blur-md border-r border-slate-200/60">
       <div className="flex flex-col h-full">
+        {/* ── Logo 区域 ── */}
+        <div className="flex items-center gap-2.5 px-2 py-3 mb-4">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-md shadow-blue-500/20">
+            译
+          </div>
+          <div>
+            <div className="font-bold text-sm text-slate-900 tracking-tight">乐曼同传</div>
+            <p className="text-[11px] text-slate-400">中越双语直播同传</p>
+          </div>
+        </div>
+
         {/* ── 导航菜单 ── */}
-        <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
+        <nav className="space-y-1">
           {NAV_ITEMS.map((item) => {
-            const isActive = activeTab === item.key
             const Icon = item.icon
+            const isActive = activeTab === item.key
             let badge: number | null = null
             if (item.key === 'danmaku' && messageCount > 0) badge = messageCount
             else if (item.key === 'subtitle' && historyCount > 0) badge = historyCount
@@ -81,19 +68,20 @@ export default function Sidebar({
               <button
                 key={item.key}
                 onClick={() => onTabChange(item.key)}
-                className={`relative flex items-center gap-2.5 w-full px-3 py-2.5 rounded-xl text-left transition-all duration-150 ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
                   isActive
-                    ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-200 font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_0_16px_rgba(99,102,241,0.15)]'
-                    : 'text-white/55 hover:bg-white/[0.06] hover:text-white/90'
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
-                {isActive && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-full bg-gradient-to-b from-blue-400 to-purple-400" />
-                )}
-                <Icon className="w-4 h-4 flex-shrink-0" />
-                <span className="text-[13px] flex-1">{item.label}</span>
+                <div className="flex items-center gap-2.5">
+                  <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                  <span>{item.label}</span>
+                </div>
                 {badge != null && (
-                  <span className="min-w-[20px] h-5 text-[10px] rounded-full flex items-center justify-center font-bold px-1.5 bg-gradient-to-r from-blue-500 to-purple-500 text-white">
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-600'
+                  }`}>
                     {badge > 99 ? '99+' : badge}
                   </span>
                 )}
@@ -101,54 +89,28 @@ export default function Sidebar({
             )
           })}
         </nav>
+      </div>
 
-        {/* ── 分割线 ── */}
-        <div className="mx-2 h-px bg-white/[0.08]" />
-
-        {/* ── 底部状态区 ── */}
-        <div className="px-3 py-3 space-y-2">
-          {/* 后端状态 */}
-          <div className="flex items-center gap-2 px-2.5 py-2 rounded-xl bg-white/[0.05] border border-white/[0.08]">
-            {backendReady ? (
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-            ) : backendFailed ? (
-              <AlertCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
-            ) : (
-              <Loader2 className="w-3.5 h-3.5 text-white/40 flex-shrink-0 animate-spin" />
-            )}
-            <span className="text-[11px] text-white/60 truncate font-medium">
-              {backendReady ? `引擎在线 · ${backendPort}` : backendFailed ? '引擎离线' : '启动中...'}
-            </span>
-          </div>
-
-          {/* 检查更新 */}
-          {showUpdateButton && (
-            <button
-              onClick={onCheckUpdate}
-              disabled={updateDisabled}
-              className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-[11px] font-medium border transition-all duration-150 ${
-                updateDisabled
-                  ? 'bg-white/[0.03] text-white/30 cursor-not-allowed border-white/[0.08]'
-                  : updateStatus === 'available' || updateStatus === 'downloaded'
-                    ? 'bg-amber-500/15 border-amber-400/30 text-amber-300 hover:bg-amber-500/25'
-                    : 'bg-white/[0.05] border-white/[0.1] text-white/60 hover:bg-white/[0.08]'
-              }`}
-            >
-              {updateStatus === 'checking' || updateStatus === 'downloading' ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : updateStatus === 'available' || updateStatus === 'downloaded' ? (
-                <Download className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronDown className="w-3.5 h-3.5" />
-              )}
-              {updateButtonText}
-            </button>
-          )}
-
-          {/* 版本号 */}
-          <div className="text-center pt-1">
-            <span className="text-[10px] text-white/30 font-mono font-medium">v{appVersion || '0.2.0'}</span>
-          </div>
+      {/* ── 底部状态 ── */}
+      <div className="bg-gradient-to-b from-white to-slate-50 p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className="text-xs font-bold text-slate-800">引擎状态</span>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${
+            backendReady ? 'bg-emerald-50 text-emerald-600' : 
+            backendFailed ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+          }`}>
+            {backendReady ? '在线' : backendFailed ? '离线' : '启动中'}
+          </span>
+        </div>
+        <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden mb-2">
+          <div className={`h-full rounded-full transition-all ${
+            backendReady ? 'bg-emerald-500 w-full' : 
+            backendFailed ? 'bg-rose-500 w-1/4' : 'bg-amber-500 w-2/4 animate-pulse'
+          }`} />
+        </div>
+        <div className="flex items-center justify-between text-[11px] text-slate-400 font-medium">
+          <span>{backendReady ? `端口 ${backendPort}` : 'FastAPI'}</span>
+          <span className="text-[10px] font-mono">v{appVersion}</span>
         </div>
       </div>
     </aside>

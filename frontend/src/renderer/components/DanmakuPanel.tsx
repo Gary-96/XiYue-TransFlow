@@ -5,7 +5,6 @@ import type { StreamMessage } from '../types'
 
 interface DanmakuPanelProps {
   messages: StreamMessage[]
-  onClear: () => void
 }
 
 const TYPE_STYLES: Record<string, { color: string; icon: typeof MessageSquare; label: string }> = {
@@ -24,7 +23,7 @@ interface DanmakuMessage extends StreamMessage {
   translated_text?: string
 }
 
-export default function DanmakuPanel({ messages, onClear }: DanmakuPanelProps) {
+export default function DanmakuPanel({ messages }: DanmakuPanelProps) {
   const { t } = useTranslation()
   const listRef = useRef<HTMLDivElement>(null)
 

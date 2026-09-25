@@ -40,6 +40,7 @@ export function usePlatform() {
     } finally {
       setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const stopPlatform = useCallback(async () => {
@@ -59,6 +60,7 @@ export function usePlatform() {
     } finally {
       setLoading(false)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchStatus = useCallback(async () => {

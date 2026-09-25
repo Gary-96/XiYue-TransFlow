@@ -2,8 +2,7 @@
  * BusinessDashboard — 乐曼同传运营看板 (Soybean Admin 风格)
  * 包含：欢迎语、核心指标卡、趋势图、平台分布、激活动态、到期预警
  */
-import { useState, useEffect } from 'react'
-import { API_BASE } from '../services/api'
+import { useState } from 'react'
 
 // ── 数据接口 ───────────────────────────────────────────────────────
 interface StatCard {
@@ -83,38 +82,6 @@ const EXPIRY_WARNINGS: ExpiryWarning[] = [
   { id: 4, deviceCode: 'mac-9e2c1a', expireDate: '2026-08-22', daysLeft: 9, status: 'warning' },
 ]
 
-// ── 迷你折线图组件 (SVG) ────────────────────────────────────────────
-function MiniLineChart({ data, height = 60 }: { data: number[]; height?: number }) {
-  const max = Math.max(...data, 1)
-  const min = Math.min(...data, 0)
-  const range = max - min || 1
-  const width = 120
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width
-    const y = height - ((v - min) / range) * (height - 4) - 2
-    return `${x},${y}`
-  }).join(' ')
-  
-  return (
-    <svg width={width} height={height} className="overflow-visible">
-      <polyline
-        points={points}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="text-blue-500"
-      />
-      {data.map((v, i) => {
-        const x = (i / (data.length - 1)) * width
-        const y = height - ((v - min) / range) * (height - 4) - 2
-        return <circle key={i} cx={x} cy={y} r="2" className="fill-blue-500" />
-      })}
-    </svg>
-  )
-}
-
 // ── 饼图组件 (SVG) ─────────────────────────────────────────────────
 function SimplePieChart({ data, size = 120 }: { data: PlatformData[]; size?: number }) {
   const total = data.reduce((s, d) => s + d.percent, 0)
@@ -171,24 +138,7 @@ function SimplePieChart({ data, size = 120 }: { data: PlatformData[]; size?: num
 
 // ── 主组件 ─────────────────────────────────────────────────────────
 export default function BusinessDashboard() {
-  const [backendReady, setBackendReady] = useState(false)
-  const [health, setHealth] = useState<any>(null)
-  
-  useEffect(() => {
-    const checkHealth = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/health`)
-        const data = await res.json()
-        setHealth(data)
-        setBackendReady(data?.status === 'healthy')
-      } catch (e) {
-        console.error('[BusinessDashboard] Health check failed:', e)
-      }
-    }
-    checkHealth()
-    const timer = setInterval(checkHealth, 10000)
-    return () => clearInterval(timer)
-  }, [])
+  const [backendReady] = useState(false)
   
   const durationData = TREND_DATA.map(d => d.duration)
   const apiData = TREND_DATA.map(d => d.apiCalls)

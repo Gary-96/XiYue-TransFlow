@@ -4,6 +4,8 @@
 """
 import asyncio
 import logging
+import os
+import sys
 from typing import Optional
 from app.models.schemas import TranscriptionResult
 
@@ -39,6 +41,11 @@ def _load_model():
         if model_dir and not os.path.isabs(model_dir):
             # 相对路径，在打包环境下可能不存在，改用绝对路径
             model_dir = os.path.join(os.path.expanduser("~"), ".cache", "faster-whisper")
+        elif sys._MEIPASS:
+            # 打包环境：模型放在资源目录下
+            model_dir = os.path.join(sys._MEIPASS, "models", "faster-whisper")
+            if not os.path.exists(model_dir):
+                model_dir = None  # 回退到默认缓存路径
 
         logger.info(f"Loading Whisper model: {model_size} on {device}")
         _model = WhisperModel(

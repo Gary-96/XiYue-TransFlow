@@ -18,9 +18,6 @@ import type {
   CallDevicesResponse,
   AudioSpectrumData,
 } from '../types'
-// Toast 辅助（未使用，保留以备扩展）
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { toast as _unusedToast } from './use-toast'
 
 // ── 简单的事件发射器（替代全局回调）──────────────────────────────
 class EventEmitter {
@@ -73,7 +70,7 @@ export function useStreamWebSocket() {
     ws.onopen = () => {
       setStatus('connected')
       retryCountRef.current = 0 // 重置重试计数
-      console.log('[Stream WS] 已连接')
+      console.warn('[Stream WS] 已连接')
     }
 
     ws.onmessage = (event: MessageEvent) => {
@@ -108,7 +105,7 @@ export function useStreamWebSocket() {
       // 指数退避重连：初始 3s，每次翻倍，最大 30s
       retryCountRef.current += 1
       const delay = Math.min(3000 * Math.pow(2, retryCountRef.current - 1), MAX_RETRY_DELAY)
-      console.log(`[Stream WS] 断开，${delay}ms 后重连 (重试 #${retryCountRef.current})`)
+      console.warn(`[Stream WS] 断开，${delay}ms 后重连 (重试 #${retryCountRef.current})`)
       
       reconnectTimerRef.current = window.setTimeout(connect, delay)
     }
@@ -253,7 +250,7 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
       wsRef.current = ws
 
       ws.onopen = () => {
-        console.log('[Audio WS] 已连接')
+        console.warn('[Audio WS] 已连接')
         setIsRecording(true)
       }
 
@@ -305,7 +302,7 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
       }
 
       ws.onclose = () => {
-        console.log('[Audio WS] 断开')
+        console.warn('[Audio WS] 断开')
         setIsRecording(false)
       }
 

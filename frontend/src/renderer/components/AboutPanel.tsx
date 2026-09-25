@@ -6,20 +6,20 @@ import { useState, useEffect } from 'react'
 const GITHUB_URL = 'https://github.com/Gary-96/leman-translate'
 
 export default function AboutPanel() {
-  const [appVersion, setAppVersion] = useState<string>('0.2.0')
   const [checking, setChecking] = useState(false)
+  const [appVersion, setAppVersion] = useState<string>('加载中...')
   const electron = window.electronAPI
 
-  // 动态获取版本号
   useEffect(() => {
-    electron?.getAppVersion?.()?.then((v: string) => setAppVersion(v || '0.2.0'))
+    electron?.getAppVersion?.().then((v: string) => setAppVersion(v || '0.1.1')).catch(() => setAppVersion('0.1.1'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleCheckUpdate = async () => {
     setChecking(true)
     try {
       await electron.checkForUpdate()
-      console.log('[About] 更新检查完成')
+      console.warn('[About] 更新检查完成')
     } catch (err) {
       console.error('[About] 检查更新失败:', err)
     } finally {

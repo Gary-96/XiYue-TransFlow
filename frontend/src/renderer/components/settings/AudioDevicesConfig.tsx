@@ -24,9 +24,10 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
   const loadAudioDevices = useCallback(async () => {
     setLoadingDevices(true)
     try {
-      const res = await fetch(`${API_BASE}/api/audio/devices/all`)
+      const res = await fetch(`${API_BASE}/api/audio/devices`)
       const data = await res.json()
-      if (data.status === 'success') {
+      // 后端 /api/audio/devices 直接返回 { inputs, outputs, current_devices? }
+      if (data && data.inputs && data.outputs) {
         setInputDevices(data.inputs || [])
         setOutputDevices(data.outputs || [])
         if (data.current_devices) {
@@ -59,7 +60,7 @@ export default function AudioDevicesConfig({ onToast }: AudioDevicesConfigProps)
     setter(deviceId)
     
     try {
-      const res = await fetch(`${API_BASE}/api/audio/devices/route`, {
+      const res = await fetch(`${API_BASE}/api/audio/device`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ device_key: deviceKey, device_id: deviceId }),
