@@ -469,6 +469,10 @@ class ConfigManager:
     def get_local_cuda_download_url(self) -> str:
         return self._config.get("local_cuda_download_url", "")
 
+    def get_local_llamacpp_path(self) -> str:
+        """获取 llama.cpp 可执行文件路径"""
+        return self._config.get("local_llamacpp_path", "")
+
     def get_server_port(self) -> int:
         """获取服务器端口（从配置读取，默认 15387）"""
         return self._config.get("server_port", 15387)

@@ -1,8 +1,8 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react'
-import Dashboard from './components/Dashboard'
+import Dashboard from './features/dashboard'
 import i18n from './i18n'
 import { I18nextProvider } from 'react-i18next'
-import { ToastContainer } from './components/ui'
+import { ToastContainer } from './ui'
 
 // 🛡️ 错误边界组件：专门防止子组件报错导致整个页面彻底黑屏
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
@@ -26,7 +26,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
           <h2 style={{ color: 'rgba(255,255,255,0.92)', marginBottom: 12 }}>⚠️ 界面加载异常</h2>
           <p style={{ color: 'rgba(255,255,255,0.58)', marginBottom: 16 }}>软件捕获到一个运行时错误，建议刷新或检查后端服务：</p>
           <pre style={{ background: 'rgba(255,255,255,0.05)', padding: 12, borderRadius: 8, color: '#fb7185', overflow: 'auto', fontSize: 12, maxHeight: 200 }}>
-            {this.state.error?.toString()}
+            {this.state.error?.message || this.state.error?.toString() || '未知错误'}
           </pre>
           <button
             onClick={() => window.location.reload()}

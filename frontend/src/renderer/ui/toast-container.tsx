@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getToasts } from '../../hooks/use-toast'
-import type { ToastItem } from '../../hooks/use-toast'
+import { getToasts } from '../hooks/use-toast'
+import type { ToastItem } from '../hooks/use-toast'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 

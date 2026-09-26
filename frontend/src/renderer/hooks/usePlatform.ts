@@ -2,7 +2,7 @@
  * 平台控制 Hook — 调用后端 REST API
  */
 import { useState, useCallback } from 'react'
-import { API_BASE } from '../services/api'
+import { apiGet, apiPost } from '../services/api'
 import type { PlatformStatus } from '../types'
 
 export function usePlatform() {
@@ -18,17 +18,12 @@ export function usePlatform() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${API_BASE}/api/platform/switch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform,
-          identifier,
-          auto_translate: autoTranslate,
-        }),
+      const data = await apiPost<{ error?: string }>('/api/platform/switch', {
+        platform,
+        identifier,
+        auto_translate: autoTranslate,
       })
-      const data = await res.json()
-      if (data.error) {
+      if (data?.error) {
         setError(data.error)
         return false
       }
@@ -46,9 +41,8 @@ export function usePlatform() {
   const stopPlatform = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_BASE}/api/platform/stop`, { method: 'POST' })
-      const data = await res.json()
-      if (data.error) {
+      const data = await apiPost<{ error?: string }>('/api/platform/stop')
+      if (data?.error) {
         setError(data.error)
         return false
       }
@@ -65,11 +59,8 @@ export function usePlatform() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/platform/status`)
-      const data = await res.json()
-      if (!data.error) {
-        setStatus(data)
-      }
+      const data = await apiGet<PlatformStatus>('/api/platform/status')
+      setStatus(data ?? null)
     } catch {
       // 后端未启动时静默
     }
@@ -77,8 +68,8 @@ export function usePlatform() {
 
   const checkHealth = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}/health`)
-      return await res.json()
+      const data = await apiGet<{ status: string }>('/health')
+      return data ?? null
     } catch {
       return null
     }

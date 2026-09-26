@@ -2,7 +2,7 @@
  * MetricBadges — 4 列状态微胶囊 (Dashboard 子组件)
  * 本地引擎端口 / 网络连接 / 会话翻译句数 / TTS 合成状态
  */
-import type { ConnectionStatus } from '../../types'
+import type { ConnectionStatus } from '../../../types'
 
 interface MetricBadgesProps {
   backendReady: boolean
@@ -49,14 +49,14 @@ export default function MetricBadges({
   ]
 
   return (
-    <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs grid grid-cols-4 gap-3 shrink-0">
+    <div className="bg-white/10 backdrop-blur-md p-3.5 rounded-2xl border border-white/10 shadow-2xs grid grid-cols-4 gap-3 shrink-0">
       {items.map((item, i) => (
-        <div key={item.label} className={`space-y-0.5 ${i > 0 ? 'border-l border-slate-100 pl-3' : ''}`}>
-          <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
+        <div key={item.label} className={`space-y-0.5 ${i > 0 ? 'border-l border-white/10 pl-3' : ''}`}>
+          <div className="flex items-center gap-1.5 text-[11px] text-white/50 font-medium">
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.dot}`} />
             {item.label}
           </div>
-          <div className={`text-sm font-black text-slate-900 ${item.mono ? 'font-mono' : ''}`}>
+          <div className={`text-sm font-black ${item.mono ? 'font-mono' : ''} text-white`}>
             {item.value}
           </div>
         </div>

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MessageSquare, Radio, Users, Heart, Gift, TrendingUp } from 'lucide-react'
-import type { StreamMessage } from '../types'
+import type { StreamMessage } from '../../types'
 
 interface DanmakuPanelProps {
   messages: StreamMessage[]

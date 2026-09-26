@@ -1,14 +1,14 @@
 /**
  * 后端 WebSocket 通信 Hook
  * 管理弹幕流 /ws/stream 和音频同传 /ws/audio
- * 
+ *
  * 修复内容：
- * 1. 移除全局回调函数，使用事件发射器模式
+ * 1. 移除全局 EventEmitter 单例，改为 hook 实例内部管理
  * 2. 消除所有 any 类型
  * 3. 完善 useEffect cleanup 防止内存泄漏
  */
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { WS_BASE, API_BASE } from '../services/api'
+import { WS_BASE } from '../services/api'
 import type {
   StreamMessage,
   AudioTranscription,
@@ -18,8 +18,9 @@ import type {
   CallDevicesResponse,
   AudioSpectrumData,
 } from '../types'
+import { apiPut, apiGet } from '../services/api'
 
-// ── 简单的事件发射器（替代全局回调）──────────────────────────────
+// ── 内部事件发射器类（每个 hook 实例独立持有）──────────────────────────────
 class EventEmitter {
   private events = new Map<string, Set<(...args: unknown[]) => void>>()
 
@@ -36,10 +37,7 @@ class EventEmitter {
   }
 }
 
-// 创建全局事件发射器实例
-const eventEmitter = new EventEmitter()
-
-// 导出事件类型常量
+// ── 事件类型常量 ──
 export const WS_EVENTS = {
   LANGUAGE_CHANGED: 'language_changed',
   VOICE_CHANGED: 'voice_changed',
@@ -53,6 +51,8 @@ export function useStreamWebSocket() {
   const reconnectTimerRef = useRef<number | null>(null)
   const retryCountRef = useRef(0)
   const MAX_RETRY_DELAY = 30000 // 最大重连延迟 30 秒
+  // 每个实例独立持有 eventEmitter，避免多窗口串台
+  const eventEmitterRef = useRef<EventEmitter>(new EventEmitter())
 
   const connect = useCallback(() => {
     // 如果已有连接且处于打开状态，直接返回
@@ -80,17 +80,17 @@ export function useStreamWebSocket() {
         // 通过事件发射器分发语言/音色变更事件
         if (parsed.type === 'language_changed' || parsed.type === 'language_switched') {
           const msg = parsed as Exclude<WebSocketMessage, CallSubtitle> & { src_lang: string; tgt_lang: string }
-          eventEmitter.emit(WS_EVENTS.LANGUAGE_CHANGED, msg.src_lang, msg.tgt_lang)
+          eventEmitterRef.current.emit(WS_EVENTS.LANGUAGE_CHANGED, msg.src_lang, msg.tgt_lang)
         }
         if (parsed.type === 'voice_changed') {
           const msg = parsed as Exclude<WebSocketMessage, CallSubtitle> & { voice_id: string }
-          eventEmitter.emit(WS_EVENTS.VOICE_CHANGED, msg.voice_id)
+          eventEmitterRef.current.emit(WS_EVENTS.VOICE_CHANGED, msg.voice_id)
         }
 
         // 其他消息按 StreamMessage 处理
-        if (parsed.type !== 'language_changed' && parsed.type !== 'language_switched' && 
-            parsed.type !== 'voice_changed' && parsed.type !== 'tts_status' &&
-            parsed.type !== 'audio_spectrum' && parsed.type !== 'call_subtitle') {
+        if (parsed.type !== 'language_changed' && parsed.type !== 'language_switched' &&
+          parsed.type !== 'voice_changed' && parsed.type !== 'tts_status' &&
+          parsed.type !== 'audio_spectrum' && parsed.type !== 'call_subtitle') {
           setMessages((prev) => [...prev.slice(-200), parsed as StreamMessage])
         }
       } catch (e) {
@@ -101,12 +101,12 @@ export function useStreamWebSocket() {
     ws.onclose = () => {
       setStatus('disconnected')
       wsRef.current = null
-      
+
       // 指数退避重连：初始 3s，每次翻倍，最大 30s
       retryCountRef.current += 1
       const delay = Math.min(3000 * Math.pow(2, retryCountRef.current - 1), MAX_RETRY_DELAY)
       console.warn(`[Stream WS] 断开，${delay}ms 后重连 (重试 #${retryCountRef.current})`)
-      
+
       reconnectTimerRef.current = window.setTimeout(connect, delay)
     }
 
@@ -137,6 +137,8 @@ export function useStreamWebSocket() {
         wsRef.current.close()
         wsRef.current = null
       }
+      // 清空事件监听器，防止内存泄漏
+      eventEmitterRef.current = new EventEmitter()
     }
   }, [connect])
 
@@ -144,26 +146,47 @@ export function useStreamWebSocket() {
 }
 
 // ── 事件监听器 Hook ─────────────────────────────────────────────
+/**
+ * 语言变更监听器 Hook
+ * @param callback - 语言变更回调函数
+ */
 export function useLanguageChangeListener(
   callback: (srcLang: string, tgtLang: string) => void
 ): void {
+  // 每个 hook 实例持有独立的 EventEmitter 和监听器引用
+  const emitterRef = useRef<EventEmitter>(new EventEmitter())
+  const callbackRef = useRef(callback)
+  callbackRef.current = callback
+
   useEffect(() => {
-    const handler = (srcLang: string, tgtLang: string) => callback(srcLang, tgtLang)
-    eventEmitter.on(WS_EVENTS.LANGUAGE_CHANGED, handler as (...args: unknown[]) => void)
-    return () => {
-      eventEmitter.off(WS_EVENTS.LANGUAGE_CHANGED, handler as (...args: unknown[]) => void)
+    const handler: (...args: unknown[]) => void = (...args) => {
+      const [srcLang, tgtLang] = args as [string, string]
+      callback(srcLang, tgtLang)
     }
-  }, [callback])
+    emitterRef.current.on(WS_EVENTS.LANGUAGE_CHANGED, handler)
+    return () => {
+      emitterRef.current.off(WS_EVENTS.LANGUAGE_CHANGED, handler)
+    }
+  }, [])
 }
 
+/**
+ * 音色变更监听器 Hook
+ * @param callback - 音色变更回调函数
+ */
 export function useVoiceChangeListener(callback: (voiceId: string) => void): void {
+  const emitterRef = useRef<EventEmitter>(new EventEmitter())
+
   useEffect(() => {
-    const handler = (voiceId: string) => callback(voiceId)
-    eventEmitter.on(WS_EVENTS.VOICE_CHANGED, handler as (...args: unknown[]) => void)
-    return () => {
-      eventEmitter.off(WS_EVENTS.VOICE_CHANGED, handler as (...args: unknown[]) => void)
+    const handler: (...args: unknown[]) => void = (...args) => {
+      const [voiceId] = args as [string]
+      callback(voiceId)
     }
-  }, [callback])
+    emitterRef.current.on(WS_EVENTS.VOICE_CHANGED, handler)
+    return () => {
+      emitterRef.current.off(WS_EVENTS.VOICE_CHANGED, handler)
+    }
+  }, [])
 }
 
 // ── Audio WebSocket Hook ────────────────────────────────────────
@@ -214,6 +237,29 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
     remoteDeviceIdRef.current = remoteDeviceId
   }, [remoteDeviceId])
 
+  // ── TTS 控制 ──
+  const toggleTTSEnabled = useCallback(async (enabled: boolean) => {
+    setTTSEnabled(enabled)
+    try {
+      await apiPut('/api/tts/enable', { enabled })
+    } catch (e) {
+      console.error('TTS enable failed:', e)
+    }
+  }, [])
+
+  const getTTSStatus = useCallback(async () => {
+    try {
+      const data = await apiGet<{ status: string; enabled: boolean }>('/api/tts/status')
+      if (data?.status === 'success') {
+        setTTSEnabled(data.enabled)
+      }
+      return data
+    } catch (e) {
+      console.error('TTS status failed:', e)
+      return null
+    }
+  }, [])
+
   // ── 录音控制 ─────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
     try {
@@ -224,12 +270,12 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
         echoCancellation: true,
         noiseSuppression: true,
       }
-      
+
       const currentDeviceId = micDeviceIdRef.current
       if (currentDeviceId != null && currentDeviceId >= 0) {
         audioConstraints.deviceId = { exact: String(currentDeviceId) }
       }
-      
+
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: audioConstraints,
       })
@@ -266,10 +312,10 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
           }).catch(() => {})
           return
         }
-        
+
         try {
           const data = JSON.parse(event.data) as WebSocketMessage
-          
+
           if (data.type === 'audio_transcription') {
             const trans = data as AudioTranscription
             setTranscription(trans)
@@ -339,31 +385,31 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
       processorRef.current.disconnect()
       processorRef.current = null
     }
-    
+
     // 停止音频流
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop())
       streamRef.current = null
     }
-    
+
     // 关闭音频上下文
     if (audioContextRef.current) {
       audioContextRef.current.close().catch(() => {})
       audioContextRef.current = null
     }
-    
+
     // 关闭 TTS 音频上下文
     if (ttsAudioContextRef.current) {
       ttsAudioContextRef.current.close().catch(() => {})
       ttsAudioContextRef.current = null
     }
-    
+
     // 关闭 WebSocket
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
     }
-    
+
     setIsRecording(false)
   }, [])
 
@@ -379,121 +425,6 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
     spectrumCallbackRef.current = cb
   }, [])
 
-  // ── TTS 控制 ─────────────────────────────────────────────────
-  const toggleTTSEnabled = useCallback(async (enabled: boolean) => {
-    setTTSEnabled(enabled)
-    try {
-      const res = await fetch(`${API_BASE}/api/tts/enable`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    } catch (e) {
-      console.error('TTS enable failed:', e)
-    }
-  }, [])
-
-  const clearTTSQueue = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/tts/clear-queue`, { method: 'POST' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    } catch (e) {
-      console.error('TTS clear queue failed:', e)
-    }
-  }, [])
-
-  const getTTSStatus = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/tts/status`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json() as { status: string; enabled: boolean }
-      if (data.status === 'success') {
-        setTTSEnabled(data.enabled)
-      }
-      return data
-    } catch (e) {
-      console.error('TTS status failed:', e)
-      return null
-    }
-  }, [])
-
-  // ── 通话同传方法 ──────────────────────────────────────────────
-  const listCallDevices = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/call/list-devices`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json() as CallDevicesResponse
-      if (data.status === 'success') {
-        setCallDevices(data)
-      }
-      return data
-    } catch (e) {
-      console.error('Call list devices failed:', e)
-      return null
-    }
-  }, [])
-
-  const getCallStatus = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/call/status`)
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json() as { status: string; is_running: boolean; mode: string }
-      if (data.status === 'success') {
-        setCallRunning(data.is_running)
-        setCallMode(data.mode as 'subtitle_only' | 'tts_auto')
-      }
-      return data
-    } catch (e) {
-      console.error('Call status failed:', e)
-      return null
-    }
-  }, [])
-
-  const startCallTranslation = useCallback(async (mode: string, loopbackIdx?: number, ttsIdx?: number) => {
-    try {
-      const res = await fetch(`${API_BASE}/api/call/start`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode, loopback_device_index: loopbackIdx, tts_device_index: ttsIdx }),
-      })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json() as { status: string; mode: string }
-      if (data.status === 'started') {
-        setCallRunning(true)
-        setCallMode(data.mode as 'subtitle_only' | 'tts_auto')
-      }
-      return data
-    } catch (e) {
-      console.error('Call start failed:', e)
-      return null
-    }
-  }, [])
-
-  const stopCallTranslation = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/call/stop`, { method: 'POST' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json() as { status: string }
-      if (data.status === 'stopped') {
-        setCallRunning(false)
-      }
-      return data
-    } catch (e) {
-      console.error('Call stop failed:', e)
-      return null
-    }
-  }, [])
-
-  const resetCallStats = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE}/api/call/reset-stats`, { method: 'POST' })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    } catch (e) {
-      console.error('Call reset stats failed:', e)
-    }
-  }, [])
-
   return {
     transcription,
     history,
@@ -505,17 +436,6 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
     stopRecording,
     setSpectrumCallback,
     toggleTTSEnabled,
-    clearTTSQueue,
     getTTSStatus,
-    // 通话同传
-    callRunning,
-    callMode,
-    callHistory,
-    callDevices,
-    listCallDevices,
-    getCallStatus,
-    startCallTranslation,
-    stopCallTranslation,
-    resetCallStats,
   }
 }

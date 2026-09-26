@@ -32,6 +32,21 @@ def _check_dependencies() -> tuple[bool, str]:
         from faster_whisper import WhisperModel  # noqa: F401
     except ImportError:
         missing.append("faster-whisper")
+    # 补充检查音频处理相关依赖
+    try:
+        import sounddevice  # noqa: F401
+    except ImportError:
+        missing.append("sounddevice")
+    try:
+        import scipy  # noqa: F401
+    except ImportError:
+        missing.append("scipy")
+    # edge_tts 为可选 TTS 依赖
+    try:
+        import edge_tts  # noqa: F401
+    except ImportError:
+        logger.warning("edge_tts 未安装，TTS 功能将降级使用")
+
     if missing:
         return False, f"缺少依赖: {', '.join(missing)}。请运行: pip install {' '.join(missing)}"
     return True, ""

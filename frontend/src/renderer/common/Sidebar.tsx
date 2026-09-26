@@ -38,15 +38,15 @@ export default function Sidebar({
   historyCount,
 }: SidebarProps) {
   return (
-    <aside className="w-60 flex flex-col p-4 bg-white/70 backdrop-blur-md border-r border-slate-200/60">
+    <aside className="w-60 flex flex-col p-4 bg-zinc-900/90 backdrop-blur-md border-r border-white/10">
       {/* ── Logo 区域 ── */}
       <div className="flex items-center gap-2.5 px-2 py-3 mb-4">
         <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-base shadow-md shadow-blue-500/20">
           译
         </div>
         <div>
-          <div className="font-bold text-sm text-slate-900 tracking-tight">乐曼同传</div>
-          <p className="text-[11px] text-slate-400">中越双语直播同传</p>
+          <div className="font-bold text-sm text-white tracking-tight">乐曼同传</div>
+          <p className="text-[11px] text-white/50">中越双语直播同传</p>
         </div>
       </div>
 
@@ -66,11 +66,11 @@ export default function Sidebar({
               className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all appearance-none border-none outline-none cursor-pointer ${
                 isActive
                   ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/25'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                  : 'text-white/70 hover:bg-white/10 hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2.5">
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-white/50'}`} />
                 <span>{item.label}</span>
               </div>
               {badge != null && (

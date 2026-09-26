@@ -2,19 +2,19 @@
  * Dashboard — 主面板入口（纯布局调度组件，业务逻辑收敛于 useDashboardLogic）
  * 布局：Sidebar | TopHeader + 3/9 列 Bento Grid (QuickPanel / MetricBadges / ViewportCard)
  */
-import Sidebar from './Sidebar'
-import SettingsPanel from './SettingsPanel'
-import TopHeader from './dashboard/TopHeader'
-import MetricBadges from './dashboard/MetricBadges'
-import QuickPanel from './dashboard/QuickPanel'
-import ViewportCard from './dashboard/ViewportCard'
-import { useDashboardLogic, type ActiveTab } from './dashboard/useDashboardLogic'
+import Sidebar from '../../common/Sidebar'
+import SettingsPanel from '../settings/SettingsPanel'
+import TopHeader from './components/TopHeader'
+import MetricBadges from './components/MetricBadges'
+import QuickPanel from './components/QuickPanel'
+import ViewportCard from './components/ViewportCard'
+import { useDashboardLogic, type ActiveTab } from './hooks/useDashboardLogic'
 
 export default function Dashboard() {
   const s = useDashboardLogic()
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#f4f7fb] text-slate-800 font-sans select-none antialiased">
+    <div className="flex h-screen w-screen overflow-hidden bg-[var(--bg-deep)] text-[var(--text-main)] font-sans select-none antialiased">
       {/* 1. 左侧边栏（纯导航，引擎状态由 QuickPanel + MetricBadges 承载） */}
       <Sidebar
         activeTab={s.activeTab}
@@ -48,7 +48,7 @@ export default function Dashboard() {
         <main className="flex-1 px-6 pb-6 pt-2 overflow-hidden min-h-0">
           {/* 设置 / 关于全屏卡片 */}
           {(s.activeTab === 'audio' || s.activeTab === 'settings' || s.activeTab === 'about') && (
-            <div className="h-full bg-white rounded-2xl border border-slate-200/80 shadow-2xs overflow-y-auto p-5">
+            <div className="h-full bg-white/10 rounded-2xl border border-white/10 shadow-2xs overflow-y-auto p-5">
               <SettingsPanel activeSection={s.activeTab} />
             </div>
           )}

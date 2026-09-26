@@ -3,12 +3,12 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import LanguageConfig from './settings/LanguageConfig'
-import AudioDevicesConfig from './settings/AudioDevicesConfig'
-import ApiKeysConfig from './settings/ApiKeysConfig'
-import LocalLLMConfig from './settings/LocalLLMConfig'
-import WhisperConfig from './settings/WhisperConfig'
-import type { Toast } from '../types'
+import LanguageConfig from './LanguageConfig'
+import AudioDevicesConfig from './AudioDevicesConfig'
+import ApiKeysConfig from './ApiKeysConfig'
+import LocalLLMConfig from './LocalLLMConfig'
+import WhisperConfig from './WhisperConfig'
+import type { Toast } from '../../types'
 
 interface SettingsPanelProps {
   activeSection?: string

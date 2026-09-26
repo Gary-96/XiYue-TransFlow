@@ -64,13 +64,13 @@ export default function TopHeader({
   ) => (
     <select
       aria-label={ariaLabel}
-      className="bg-transparent text-xs font-semibold text-slate-700 outline-none cursor-pointer appearance-none border-none disabled:opacity-50"
+      className="bg-transparent text-xs font-semibold text-white/80 outline-none cursor-pointer appearance-none border-none disabled:opacity-50"
       value={value}
       onChange={(e) => onSelect(e.target.value)}
       disabled={disabled}
     >
       {supportedLangs.map((lang) => (
-        <option key={lang.code} value={lang.code}>
+        <option key={lang.code} value={lang.code} className="bg-zinc-900 text-white">
           {lang.icon} {lang.label}
         </option>
       ))}
@@ -84,7 +84,7 @@ export default function TopHeader({
     >
       {/* 居中：直播间连接条 */}
       <div
-        className="flex items-center gap-2 w-full max-w-xl bg-white rounded-full px-3 py-1.5 border border-slate-200/80 shadow-2xs"
+        className="flex items-center gap-2 w-full max-w-xl bg-white/10 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/10"
         style={noDragRegion}
       >
         {/* 平台微型切换胶囊 */}
@@ -92,7 +92,9 @@ export default function TopHeader({
           <button
             onClick={() => onPlatformChange('douyin')}
             className={`px-3 py-1 rounded-full transition-all appearance-none border-none outline-none cursor-pointer ${
-              platform === 'douyin' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
+              platform === 'douyin'
+                ? 'bg-white/20 text-white shadow-sm'
+                : 'text-white/50 hover:text-white/80'
             }`}
           >
             抖音
@@ -100,18 +102,20 @@ export default function TopHeader({
           <button
             onClick={() => onPlatformChange('tiktok')}
             className={`px-3 py-1 rounded-full transition-all appearance-none border-none outline-none cursor-pointer ${
-              platform === 'tiktok' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
+              platform === 'tiktok'
+                ? 'bg-white/20 text-white shadow-sm'
+                : 'text-white/50 hover:text-white/80'
             }`}
           >
             TikTok
           </button>
         </div>
 
-        <div className="h-4 w-px bg-slate-200 shrink-0" />
+        <div className="h-4 w-px bg-white/10 shrink-0" />
 
         {/* 直播间 ID / 链接输入 */}
         <div className="flex-1 flex items-center gap-2 min-w-0">
-          <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+          <Search className="w-3.5 h-3.5 text-white/40 shrink-0" />
           <input
             type="text"
             placeholder={
@@ -122,7 +126,7 @@ export default function TopHeader({
             value={roomId}
             onChange={(e) => onRoomIdChange(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && onConnectToggle()}
-            className="w-full bg-transparent text-xs text-slate-800 placeholder-slate-400 outline-none truncate appearance-none border-none"
+            className="w-full bg-transparent text-xs text-white/90 placeholder-white/30 outline-none truncate appearance-none border-none"
           />
         </div>
 
@@ -132,8 +136,8 @@ export default function TopHeader({
           disabled={!roomId.trim() || isConnecting}
           className={`px-4 py-2 rounded-full text-xs font-semibold transition-all shadow-xs shrink-0 cursor-pointer appearance-none border-none outline-none disabled:cursor-not-allowed flex items-center gap-1.5 ${
             platformActive
-              ? 'bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200'
-              : 'bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-40 shadow-blue-500/20'
+              ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 border border-rose-500/30'
+              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-500/20 disabled:opacity-40'
           }`}
         >
           {isConnecting && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -143,7 +147,7 @@ export default function TopHeader({
 
       {/* 右侧：语言对 + 窗口控制 */}
       <div className="flex items-center gap-2 shrink-0" style={noDragRegion}>
-        <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-xl border border-slate-200/80 shadow-2xs">
+        <div className="flex items-center gap-1 bg-white/10 backdrop-blur-md px-2 py-1 rounded-xl border border-white/10">
           {renderLangSelect(
             srcLang,
             (code) => onSetLanguage(code, tgtLang),
@@ -152,7 +156,7 @@ export default function TopHeader({
           )}
           <button
             aria-label="交换语言对"
-            className="w-4 h-4 flex items-center justify-center rounded text-[11px] text-blue-600 hover:bg-slate-100 transition-all disabled:opacity-40 font-bold appearance-none border-none outline-none cursor-pointer"
+            className="w-4 h-4 flex items-center justify-center rounded text-[11px] text-blue-400 hover:bg-white/10 transition-all disabled:opacity-40 font-bold appearance-none border-none outline-none cursor-pointer"
             onClick={onSwapLanguage}
             disabled={langSwitching}
           >
@@ -166,11 +170,11 @@ export default function TopHeader({
           )}
         </div>
 
-        <div className="flex items-center gap-1 text-slate-400">
+        <div className="flex items-center gap-1 text-white/50">
           <button
             onClick={onTogglePin}
-            className={`p-1.5 rounded-lg hover:bg-white hover:text-slate-700 transition-all ${
-              isPinned ? 'text-blue-600 bg-blue-50' : ''
+            className={`p-1.5 rounded-lg hover:bg-white/10 hover:text-white transition-all ${
+              isPinned ? 'text-blue-400 bg-blue-500/20' : ''
             }`}
             title="置顶窗口"
           >
@@ -178,20 +182,20 @@ export default function TopHeader({
           </button>
           <button
             onClick={onMinimize}
-            className="p-1.5 rounded-lg hover:bg-white hover:text-slate-700 transition-all"
+            className="p-1.5 rounded-lg hover:bg-white/10 hover:text-white transition-all"
             title="最小化"
           >
             <Minus className="w-3.5 h-3.5" />
           </button>
           <button
-            className="p-1.5 rounded-lg hover:bg-white hover:text-slate-700 transition-all"
+            className="p-1.5 rounded-lg hover:bg-white/10 hover:text-white transition-all"
             title="全屏"
           >
             <Square className="w-3 h-3" />
           </button>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-rose-50 hover:text-rose-600 transition-all"
+            className="p-1.5 rounded-lg hover:bg-rose-500/20 hover:text-rose-400 transition-all"
             title="关闭"
           >
             <X className="w-3.5 h-3.5" />
