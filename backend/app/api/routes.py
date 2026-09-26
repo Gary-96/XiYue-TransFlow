@@ -241,11 +241,11 @@ call_router = APIRouter(prefix="/api/call", tags=["通话同传"])
 async def list_call_devices():
     """获取通话同传设备列表"""
     try:
-        from app.services.call_translation_service import call_translation_service
+        from app.services.call_translation import get_call_translation_service
+        service = get_call_translation_service()
         return {
             "status": "success",
-            "loopback_devices": call_translation_service.get_loopback_devices(),
-            "tts_devices": call_translation_service.get_tts_devices(),
+            "loopback_devices": await service.list_devices(),
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -255,11 +255,14 @@ async def list_call_devices():
 async def get_call_status():
     """获取通话同传状态"""
     try:
-        from app.services.call_translation_service import call_translation_service
+        from app.services.call_translation import get_call_translation_service
+        service = get_call_translation_service()
+        status = service.get_status()
         return {
             "status": "success",
-            "is_running": call_translation_service.state.is_running,
-            "mode": call_translation_service.state.mode.value if call_translation_service.state.mode else "subtitle_only",
+            "is_running": status["is_running"],
+            "mode": status["mode"],
+            "stats": status["stats"],
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
@@ -271,14 +274,17 @@ async def start_call_translation(
 ):
     """启动通话同传"""
     try:
-        from app.services.call_translation_service import call_translation_service, CallMode
+        from app.services.call_translation import get_call_translation_service
+        service = get_call_translation_service()
         mode = request.get("mode", "subtitle_only")
         loopback_idx = request.get("loopback_device_index")
         tts_idx = request.get("tts_device_index")
-        
-        mode_enum = CallMode.TTS_AUTO if mode == "tts_auto" else CallMode.SUBTITLE_ONLY
-        call_translation_service.start(mode=mode_enum, loopback_idx=loopback_idx, tts_idx=tts_idx)
-        return {"status": "started", "mode": mode}
+        result = await service.start(
+            mode=mode,
+            loopback_device_index=loopback_idx,
+            tts_device_index=tts_idx,
+        )
+        return result
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -287,9 +293,10 @@ async def start_call_translation(
 async def stop_call_translation():
     """停止通话同传"""
     try:
-        from app.services.call_translation_service import call_translation_service
-        call_translation_service.stop()
-        return {"status": "stopped"}
+        from app.services.call_translation import get_call_translation_service
+        service = get_call_translation_service()
+        result = await service.stop()
+        return result
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -298,8 +305,9 @@ async def stop_call_translation():
 async def reset_call_stats():
     """重置通话同传统计"""
     try:
-        from app.services.call_translation_service import call_translation_service
-        call_translation_service.reset_stats()
+        from app.services.call_translation import get_call_translation_service
+        service = get_call_translation_service()
+        service.reset_stats()
         return {"status": "success"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
