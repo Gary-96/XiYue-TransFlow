@@ -6,6 +6,7 @@ import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Optional
 from app.models.schemas import TranscriptionResult
 
@@ -88,11 +89,15 @@ def _load_model():
         if model_dir and not os.path.isabs(model_dir):
             # 相对路径，在打包环境下可能不存在，改用绝对路径
             model_dir = os.path.join(os.path.expanduser("~"), ".cache", "faster-whisper")
-        elif sys._MEIPASS:
-            # 打包环境：模型放在资源目录下
-            model_dir = os.path.join(sys._MEIPASS, "models", "faster-whisper")
-            if not os.path.exists(model_dir):
+        elif getattr(sys, 'frozen', False):
+            # 打包环境：尝试从 _MEIPASS 加载模型
+            meipass_models = Path(sys._MEIPASS) / "models" / "faster-whisper"
+            if meipass_models.exists():
+                model_dir = str(meipass_models)
+            else:
                 model_dir = None  # 回退到默认缓存路径
+        elif model_dir:
+            model_dir = str(Path(model_dir).resolve())
 
         logger.info(f"Loading Whisper model: {model_size} on {device}")
         _model = WhisperModel(

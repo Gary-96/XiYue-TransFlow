@@ -25,6 +25,9 @@ def _load_soul_prompt() -> Optional[str]:
     global _SOUL_PROMPT_CACHE
     if _SOUL_PROMPT_CACHE is not None:
         return _SOUL_PROMPT_CACHE
+    _SOUL_PROMPT_PATHS.append(
+        Path(__file__).resolve().parents[1] / "prompts" / "vietnam-live.SOUL.md"  # venv 模式
+    )
     for path in _SOUL_PROMPT_PATHS:
         if path.exists():
             try:

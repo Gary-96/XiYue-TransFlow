@@ -516,8 +516,6 @@ class ConfigManager:
 
         return self._save()
 
-    # ── API Key 校验 ─────────────────────────────────────
-
     async def validate_api_key(
         self, provider: str, api_key: str
     ) -> Dict[str, Any]:

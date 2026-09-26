@@ -420,6 +420,26 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
     }
   }, [stopRecording])
 
+  // ── 音频设备热拔插监听 ──
+  useEffect(() => {
+    const handleDeviceChange = async () => {
+      if (!isRecording) return
+      console.warn('[Audio] 设备变化，重启录音...')
+      try {
+        await stopRecording()
+        await new Promise(r => setTimeout(r, 300))
+        await startRecording()
+      } catch (e) {
+        console.error('[Audio] 设备变化后重启失败:', e)
+      }
+    }
+
+    navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange)
+    return () => {
+      navigator.mediaDevices?.removeEventListener('devicechange', handleDeviceChange)
+    }
+  }, [isRecording, startRecording, stopRecording])
+
   // 注册频谱数据回调
   const setSpectrumCallback = useCallback((cb: ((data: number[]) => void) | null) => {
     spectrumCallbackRef.current = cb
