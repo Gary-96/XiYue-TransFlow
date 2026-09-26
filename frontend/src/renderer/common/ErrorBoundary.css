@@ -1,0 +1,92 @@
+/**
+ * 乐曼同传 — 错误边界样式
+ */
+
+.error-boundary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #0a0a1a 0%, #1a0a2e 100%);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.error-boundary__content {
+  text-align: center;
+  padding: 3rem;
+  max-width: 480px;
+}
+
+.error-boundary__icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.error-boundary__title {
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.error-boundary__description {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.875rem;
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.error-boundary__details {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.error-boundary__summary {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.75rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.error-boundary__summary:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.error-boundary__stack {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.75rem;
+  border-radius: 6px;
+  color: #fb7185;
+  font-size: 0.7rem;
+  font-family: 'Fira Code', 'Consolas', monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 160px;
+  overflow-y: auto;
+  margin-top: 0.5rem;
+  text-align: left;
+}
+
+.error-boundary__button {
+  padding: 0.625rem 1.5rem;
+  background: linear-gradient(135deg, #3b82f6 0%, #a855f7 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.error-boundary__button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.error-boundary__button:active {
+  transform: translateY(0);
+}

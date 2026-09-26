@@ -3,6 +3,8 @@
  * 优先使用环境变量，其次使用 Electron API，最后使用默认地址
  */
 
+import { BACKEND_PORT, DEFAULT_BACKEND_HOST, DEV_API_BASE_URL } from '../constants'
+
 /** 获取后端 REST API 基础地址 */
 export function getApiBaseUrl(): string {
   // 1. 优先使用环境变量
@@ -12,8 +14,7 @@ export function getApiBaseUrl(): string {
 
   // 2. 尝试使用 Electron API（如果是打包后的应用）
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const electronAPI = (window as any).electronAPI as { getBackendUrl?: () => string }
+    const electronAPI = window.electronAPI
     if (electronAPI?.getBackendUrl) {
       const url = electronAPI.getBackendUrl()
       if (url) return url as string
@@ -22,8 +23,8 @@ export function getApiBaseUrl(): string {
     // 忽略错误
   }
 
-  // 3. 默认使用 127.0.0.1（避免 localhost 解析问题）
-  return 'http://127.0.0.1:15387'
+  // 3. 默认使用常量定义的后端地址
+  return DEV_API_BASE_URL
 }
 
 /** 获取后端 WebSocket 基础地址 */

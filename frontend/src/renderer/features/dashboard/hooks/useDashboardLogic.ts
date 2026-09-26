@@ -13,8 +13,10 @@ import { usePlatform } from '../../../hooks/usePlatform'
 import { apiGet, apiPost, apiPut } from '../../../services/api'
 import { toast } from '../../../hooks/use-toast'
 import type { LangOption } from '../components/TopHeader'
+import { BACKEND_PORT, PLATFORM_DOUYIN } from '../../../constants'
 
-export type Platform = 'tiktok' | 'douyin'
+export type Platform = typeof PLATFORM_DOUYIN | 'tiktok'
+export const DEFAULT_PLATFORM = PLATFORM_DOUYIN
 export type ActiveTab = 'danmaku' | 'subtitle' | 'audio' | 'settings' | 'about'
 
 // 安全的 Electron API 访问
@@ -23,14 +25,14 @@ const electronAPI = window.electronAPI
 export function useDashboardLogic() {
   // ── 标签 / 平台 / 窗口状态 ──
   const [activeTab, setActiveTab] = useState<ActiveTab>('danmaku')
-  const [platform, setPlatform] = useState<Platform>('douyin')
+  const [platform, setPlatform] = useState<Platform>(DEFAULT_PLATFORM)
   const [roomId, setRoomId] = useState('')
   const [isPinned, setIsPinned] = useState(false)
   const [isConnecting, setIsConnecting] = useState(false)
   const [appVersion, setAppVersion] = useState<string>('加载中...')
   const [backendReady, setBackendReady] = useState(false)
   const [backendFailed, setBackendFailed] = useState(false)
-  const [backendPort] = useState<number>(15387)
+  const [backendPort] = useState<number>(BACKEND_PORT)
 
   // ── 弹幕流 + 音频同传 ──
   const { messages, status: wsStatus, clearMessages } = useStreamWebSocket()
