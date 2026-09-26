@@ -3,7 +3,8 @@
     "danmaku": "Bắn đạn dịch",
     "subtitle": "Phụ đề trực tiếp",
     "settings": "API & Cài đặt",
-    "language": "Ngôn ngữ"
+    "language": "Ngôn ngữ",
+    "log": "Nhật ký"
   },
   "dashboard": {
     "brand": "Leman Dịch Trực Tiếp",
@@ -137,7 +138,13 @@
     "testingConnection": "Đang kiểm tra...",
     "connectionSuccess": "Kết nối thành công",
     "connectionFailed": "Kết nối thất bại",
-    "saveTest": "💾 Lưu và kiểm tra"
+    "saveTest": "💾 Lưu và kiểm tra",
+    "whisperTitle": "Công cụ nhận dạng giọng nói",
+    "modelLoaded": "Đã tải",
+    "modelNotLoaded": "Chưa tải",
+    "modelSize": "Kích thước mô hình",
+    "runDevice": "Thiết bị chạy",
+    "whisperHint": "Lưu ý: Kích thước mô hình ảnh hưởng đến độ chính xác và tốc độ nhận dạng. Tiny nhanh nhất nhưng độ chính xác thấp nhất, Large v3 chính xác nhất nhưng cần ~2.9GB VRAM/bộ nhớ. CUDA yêu cầu GPU NVIDIA với hỗ trợ CUDA."
   },
   "common": {
     "cancel": "Hủy",

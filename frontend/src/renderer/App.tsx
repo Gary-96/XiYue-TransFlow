@@ -1,5 +1,4 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react'
-import './styles/global.css'
 import Dashboard from './components/Dashboard'
 import i18n from './i18n'
 import { I18nextProvider } from 'react-i18next'

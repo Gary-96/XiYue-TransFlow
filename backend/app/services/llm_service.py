@@ -61,7 +61,27 @@ class OllamaBackend:
 
     @property
     def is_available(self) -> bool:
-        return asyncio.get_running_loop().run_until_complete(self._check_health())
+        # 禁止在异步上下文中调用 run_until_complete
+        # 如需异步调用，请使用 is_available_async()
+        try:
+            loop = asyncio.get_running_loop()
+            # 如果在事件循环中，抛出自定义异常提示调用方使用 async 版本
+            raise RuntimeError(
+                "OllamaBackend.is_available 不能在异步上下文调用，"
+                "请使用 await backend.is_available_async()"
+            )
+        except RuntimeError as e:
+            if "不能在异步上下文调用" in str(e):
+                raise
+            # 没有 running loop，安全调用
+            return asyncio.get_event_loop().run_until_complete(self._check_health())
+        except RuntimeError:
+            # 没有 running loop
+            return asyncio.new_event_loop().run_until_complete(self._check_health())
+
+    async def is_available_async(self) -> bool:
+        """异步健康检查（推荐在 FastAPI 路由中使用）"""
+        return await self._check_health()
 
     async def _check_health(self) -> bool:
         try:
@@ -273,10 +293,10 @@ class LocalLLMManager:
         return self._cuda
 
     # ── 健康检查 ──────────────────────────────────────────
-    def get_status(self) -> Dict[str, Any]:
+    async def get_status(self) -> Dict[str, Any]:
         return {
             "backend": self._config.get_local_backend(),
-            "ollama_available": self._get_ollama().is_available,
+            "ollama_available": await self._get_ollama().is_available_async(),
             "ollama_url": self._config.get_local_ollama_url(),
             "cuda_available": self._get_cuda().is_available,
             "cuda_model_path": self._config.get_local_cuda_model_path(),

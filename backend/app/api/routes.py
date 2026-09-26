@@ -336,6 +336,72 @@ async def get_platform_status(
         }
 
 
+# ── 本地 LLM 路由 ─────────────────────────────────────────────
+local_llm_router = APIRouter(prefix="/api/local-llm", tags=["本地LLM"])
+
+
+@local_llm_router.get("/status")
+async def get_local_llm_status():
+    """获取本地 LLM 状态（Ollama/CUDA）"""
+    try:
+        from app.services.llm_service import get_local_llm_manager
+        manager = get_local_llm_manager()
+        status = await manager.get_status()
+        return {"status": "success", **status}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@local_llm_router.get("/models")
+async def list_local_models():
+    """获取已安装模型列表"""
+    try:
+        from app.services.llm_service import get_local_llm_manager
+        manager = get_local_llm_manager()
+        models = await manager.list_models()
+        return {"status": "success", "models": [m.to_dict() for m in models]}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@local_llm_router.post("/models/{model_name}")
+async def delete_local_model(model_name: str):
+    """删除指定模型"""
+    try:
+        from app.services.llm_service import get_local_llm_manager
+        manager = get_local_llm_manager()
+        result = await manager.delete_model(model_name)
+        return result
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@local_llm_router.post("/pull")
+async def pull_local_model(request: Dict[str, str]):
+    """拉取/下载模型"""
+    model_name = request.get("model_name", "")
+    if not model_name:
+        return {"status": "error", "message": "model_name required"}
+    try:
+        from app.services.llm_service import get_local_llm_manager
+        manager = get_local_llm_manager()
+        return await manager.pull_model(model_name)
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@local_llm_router.put("/config")
+async def save_local_llm_config(request: Dict[str, Any]):
+    """保存本地 LLM 配置"""
+    try:
+        from config_manager import get_config_manager
+        config = get_config_manager()
+        success = config.update_config(request)
+        return {"status": "success" if success else "error"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 # ── 聚合所有路由 ─────────────────────────────────────────────
 def register_routes(app):
     """注册所有路由到 FastAPI 应用"""
@@ -346,4 +412,5 @@ def register_routes(app):
     app.include_router(tts_router)
     app.include_router(call_router)
     app.include_router(platform_router)
+    app.include_router(local_llm_router)
     print("[OK] API routes registered")

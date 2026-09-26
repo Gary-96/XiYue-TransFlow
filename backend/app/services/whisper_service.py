@@ -14,13 +14,45 @@ logger = logging.getLogger(__name__)
 # 全局 Whisper 模型实例（延迟加载）
 _model = None
 _model_loaded = False
+_load_error: Optional[str] = None
+
+
+def _check_dependencies() -> tuple[bool, str]:
+    """探测关键依赖是否已安装"""
+    missing = []
+    try:
+        import numpy  # noqa: F401
+    except ImportError:
+        missing.append("numpy")
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        missing.append("torch")
+    try:
+        from faster_whisper import WhisperModel  # noqa: F401
+    except ImportError:
+        missing.append("faster-whisper")
+    if missing:
+        return False, f"缺少依赖: {', '.join(missing)}。请运行: pip install {' '.join(missing)}"
+    return True, ""
 
 
 def _load_model():
     """加载 Whisper 模型（延迟初始化，避免阻塞启动）"""
-    global _model, _model_loaded
+    global _model, _model_loaded, _load_error
     if _model_loaded:
         return True
+    if _load_error:
+        logger.error(f"Whisper 加载失败（已缓存）: {_load_error}")
+        return False
+
+    # 依赖探测
+    deps_ok, deps_msg = _check_dependencies()
+    if not deps_ok:
+        _load_error = deps_msg
+        logger.error(deps_msg)
+        return False
+
     try:
         from config_manager import get_config_manager
         import numpy as np
@@ -55,9 +87,11 @@ def _load_model():
             download_root=model_dir,
         )
         _model_loaded = True
+        _load_error = None
         logger.info("Whisper model loaded successfully")
         return True
     except Exception as e:
+        _load_error = str(e)
         logger.error(f"Failed to load Whisper model: {e}")
         return False
 
@@ -67,7 +101,6 @@ def _ensure_model_loaded() -> bool:
     if not _model_loaded:
         return _load_model()
     return True
-
 
 
 class WhisperService:
@@ -123,9 +156,21 @@ class WhisperService:
             return None
 
     def get_service_info(self) -> dict:
-        """获取服务信息"""
+        """获取服务信息，包含依赖状态"""
         return {
             "model": "faster-whisper",
             "available": _model_loaded,
             "lazy": True,
+            "error": _load_error,
+        }
+
+    @classmethod
+    def get_dependency_status(cls) -> dict:
+        """返回依赖探测结果（用于 API 诊断）"""
+        deps_ok, deps_msg = _check_dependencies()
+        return {
+            "dependencies_ok": deps_ok,
+            "message": deps_msg if not deps_ok else "所有依赖已安装",
+            "model_loaded": _model_loaded,
+            "model_error": _load_error,
         }
