@@ -1,14 +1,16 @@
 """
 乐曼同传 Leman Translate - 依赖注入
 替代全局变量，提供服务的统一访问点
-所有重型服务均懒加载，避免阻塞启动
 """
 from typing import Generator
 
 from fastapi import Depends
 from fastapi.security import HTTPBearer
+
 from config_manager import get_config_manager as _get_config_manager
 
+from app.core.event_bus import get_global_event_bus, set_global_event_bus
+from app.collectors.manager import CollectorManager, create_collector_manager
 
 # ── 配置管理器 ────────────────────────────────────────────────
 def get_config_manager() -> Generator:
@@ -23,7 +25,7 @@ _collector_manager = None
 
 
 def get_translation_service():
-    """获取翻译服务单例（首次调用时初始化）"""
+    """获取翻译服务单例"""
     global _translation_service
     if _translation_service is None:
         from app.services.translation_service import TranslationService
@@ -32,7 +34,7 @@ def get_translation_service():
 
 
 def get_whisper_service():
-    """获取 ASR 服务单例（首次调用时初始化）"""
+    """获取 ASR 服务单例"""
     global _whisper_service
     if _whisper_service is None:
         from app.services.whisper_service import WhisperService
@@ -40,12 +42,12 @@ def get_whisper_service():
     return _whisper_service
 
 
-def get_collector_manager():
-    """获取弹幕采集管理器（首次调用时初始化，含抖音/TikTok 模块导入）"""
+def get_collector_manager() -> CollectorManager:
+    """获取弹幕采集管理器单例"""
     global _collector_manager
     if _collector_manager is None:
-        from collectors.manager import create_collector_manager
-        _collector_manager = create_collector_manager()
+        from app.core.event_bus import get_global_event_bus
+        _collector_manager = create_collector_manager(event_bus=get_global_event_bus())
     return _collector_manager
 
 
@@ -61,5 +63,4 @@ security = HTTPBearer()
 
 async def get_current_user(credentials = Depends(security)):
     """获取当前用户（预留接口）"""
-    # TODO: 实现 JWT 验证
     return {"token": credentials.credentials}

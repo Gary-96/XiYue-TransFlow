@@ -9,6 +9,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import register_routes
 from app.api.websocket import router as websocket_router
+# 保留向后兼容：如果旧 routes.py 还在，导入它
+try:
+    from app.api import routes as _legacy_routes
+except ImportError:
+    _legacy_routes = None
 from app.core.base import BaseService
 from config_manager import get_config_manager
 
@@ -60,7 +65,9 @@ app.add_middleware(
 )
 
 # 注册路由
-register_routes(app)
+# 注册新路由模块
+from app.api.routes import register_routes as _register_new_routes
+_register_new_routes(app)
 app.include_router(websocket_router)
 
 # 根路由

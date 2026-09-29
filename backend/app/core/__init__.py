@@ -1,11 +1,13 @@
-"""
-乐曼同传 Leman Translate - 核心模块
-"""
-from app.core.base import BaseService, TranslatorBackend, ASRBackend, TTSBackend
+"""乐曼同传 Core 层"""
+from .base import BaseService, TranslatorBackend, ASRBackend, TTSBackend
+from .event_bus import EventBus, get_global_event_bus, set_global_event_bus
 
 __all__ = [
     "BaseService",
     "TranslatorBackend",
     "ASRBackend",
     "TTSBackend",
+    "EventBus",
+    "get_global_event_bus",
+    "set_global_event_bus",
 ]
