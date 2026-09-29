@@ -183,7 +183,7 @@ export function useVoiceChangeListener(callback: (voiceId: string) => void): voi
 
 // ── Audio WebSocket Hook ────────────────────────────────────────
 
-export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: number | null) {
+export function useAudioWebSocket(micDeviceId?: string | null, remoteDeviceId?: string | null) {
   const [transcription, setTranscription] = useState<AudioTranscription | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [history, setHistory] = useState<AudioTranscription[]>([])
@@ -199,8 +199,8 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
   const ttsAudioContextRef = useRef<AudioContext | null>(null)
   const currentAudioBufferRef = useRef<AudioBuffer | null>(null)
   const spectrumCallbackRef = useRef<((data: number[]) => void) | null>(null)
-  const micDeviceIdRef = useRef<number | null | undefined>(micDeviceId)
-  const remoteDeviceIdRef = useRef<number | null | undefined>(remoteDeviceId)
+  const micDeviceIdRef = useRef<string | null | undefined>(micDeviceId)
+  const remoteDeviceIdRef = useRef<string | null | undefined>(remoteDeviceId)
 
   // 设备变化时重启录音
   useEffect(() => {
@@ -252,9 +252,10 @@ export function useAudioWebSocket(micDeviceId?: number | null, remoteDeviceId?: 
         noiseSuppression: true,
       }
 
+      // WebRTC 标准：deviceId 为字符串 GUID（hash），用 exact 约束精准绑定
       const currentDeviceId = micDeviceIdRef.current
-      if (currentDeviceId != null && currentDeviceId >= 0) {
-        audioConstraints.deviceId = { exact: String(currentDeviceId) }
+      if (currentDeviceId) {
+        audioConstraints.deviceId = { exact: currentDeviceId }
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints })
