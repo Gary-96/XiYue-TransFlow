@@ -1,0 +1,25 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": ["app/index.d.ts", "app/**/*", "lib/**/*", "conveyor/**/*", "resources/**/*"],
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "types": ["electron-vite/node", "node"],
+    "paths": {
+      "@/*": ["./app/*", "./*"],
+      "@/types": ["./app/types"],
+      "@/hooks/*": ["./app/hooks/*"],
+      "@/services/*": ["./app/services/*"],
+      "@/features/*": ["./app/features/*"],
+      "@/components/*": ["./app/components/*"],
+      "@/shell": ["./app/shell/index"],
+      "@/lib/*": ["./lib/*"],
+      "@/conveyor/*": ["./conveyor/*"],
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
+    }
+  }
+}

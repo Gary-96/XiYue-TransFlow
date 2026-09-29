@@ -1,10 +1,28 @@
 {
+  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
+  "include": [
+    "lib/main/index.d.ts",
+    "electron.vite.config.*",
+    "eslint.config.ts",
+    "lib/**/*",
+    "conveyor/**/*",
+    "resources/**/*",
+    "app/**/*"
+  ],
   "compilerOptions": {
     "composite": true,
-    "skipLibCheck": true,
-    "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowSyntheticDefaultImports": true
-  },
-  "include": ["vite.config.ts"]
+    "types": ["electron-vite/node"],
+    "paths": {
+      "@/*": ["./app/*", "./*"],
+      "@/types": ["./app/types"],
+      "@/hooks/*": ["./app/hooks/*"],
+      "@/services/*": ["./app/services/*"],
+      "@/features/*": ["./app/features/*"],
+      "@/components/*": ["./app/components/*"],
+      "@/shell": ["./app/shell/index"],
+      "@/lib/*": ["./lib/*"],
+      "@/conveyor/*": ["./conveyor/*"]
+    }
+  }
 }
