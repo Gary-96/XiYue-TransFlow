@@ -4,7 +4,8 @@
  */
 import type {
   AuthState,
-  AudioDevice,
+  AudioDeviceKey,
+  AudioDevicesResponse,
   CallDevicesResponse,
   LanguagePair,
   TranslationRequest,
@@ -105,11 +106,9 @@ export const api = {
     }),
 
   // ── 音频设备 ──
-  getAudioDevices: () =>
-    request<{ status: string; devices: AudioDevice[]; loopback_devices: AudioDevice[] }>
-      ('/api/audio/devices'),
+  getAudioDevices: () => request<AudioDevicesResponse>('/api/audio/devices'),
 
-  setAudioDevice: (device_key: string, device_id: number) =>
+  setAudioDevice: (device_key: AudioDeviceKey, device_id: number) =>
     request<{ status: string }>('/api/audio/device', {
       method: 'PUT',
       body: JSON.stringify({ device_key, device_id }),
@@ -148,8 +147,29 @@ export const api = {
 
   // ── 平台状态 ──
   getPlatformStatus: () =>
-    request<{ status: string; connected: boolean; platforms: Record<string, { connected: boolean }> }>
-      ('/api/platform/status'),
+    request<{ status: string; connected: boolean; platforms: Record<string, { connected: boolean }> }>(
+      '/api/platform/status'
+    ),
+
+  // ── 弹幕采集器控制 ──
+  connectCollector: (platform: string, identifier: string) =>
+    request<{ status: string; platform?: string; identifier?: string; message?: string }>(
+      '/api/collector/connect',
+      {
+        method: 'POST',
+        body: JSON.stringify({ platform, identifier }),
+      }
+    ),
+
+  disconnectCollector: () =>
+    request<{ status: string; message?: string }>('/api/collector/disconnect', {
+      method: 'POST',
+    }),
+
+  getCollectorStatus: () =>
+    request<{ status: string; active_platform?: string; available_platforms?: string[]; total_messages?: number; websocket_clients?: number }>(
+      '/api/collector/status'
+    ),
 
   // ── 配置 ──
   getConfig: () =>

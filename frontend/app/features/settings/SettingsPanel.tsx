@@ -4,7 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { Server, Mic, Headphones, RefreshCw } from 'lucide-react'
-import type { AudioDevice } from '@/types'
+import type { AudioDevice, AudioDeviceKey } from '@/types'
 import { api } from '@/services/api'
 
 export default function SettingsPanel() {
@@ -21,13 +21,14 @@ export default function SettingsPanel() {
     setLoading(true)
     setError(null)
     try {
+      // 后端 list_all_devices() 直接返回 {inputs, outputs}（无 status 包裹），设备字段为 id
       const res = await api.getAudioDevices()
-      if (res.status === 'success') {
-        setAudioDevices(res.devices || [])
-        setLoopbackDevices(res.loopback_devices || [])
-        setSelectedMic(res.devices?.[0]?.index ?? null)
-        setSelectedPlayback(res.loopback_devices?.[0]?.index ?? null)
-      }
+      setAudioDevices(res.inputs || [])
+      setLoopbackDevices(res.outputs || [])
+      const defInput = res.inputs?.find((d) => d.is_default) ?? res.inputs?.[0]
+      const defOutput = res.outputs?.find((d) => d.is_default) ?? res.outputs?.[0]
+      setSelectedMic(defInput?.id ?? null)
+      setSelectedPlayback(defOutput?.id ?? null)
     } catch (e) {
       setError('加载设备列表失败')
       console.error(e)
@@ -40,7 +41,7 @@ export default function SettingsPanel() {
     loadDevices()
   }, [])
 
-  const handleSaveAudioDevice = async (deviceKey: string, deviceId: number) => {
+  const handleSaveAudioDevice = async (deviceKey: AudioDeviceKey, deviceId: number) => {
     try {
       await api.setAudioDevice(deviceKey, deviceId)
     } catch (e) {
@@ -89,13 +90,13 @@ export default function SettingsPanel() {
               onChange={(e) => {
                 const val = Number(e.target.value)
                 setSelectedMic(val)
-                handleSaveAudioDevice('mic', val)
+                handleSaveAudioDevice('mic_input', val)
               }}
               className="w-full px-3 py-2 rounded-lg bg-muted/40 border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
             >
               {audioDevices.map(d => (
-                <option key={d.index} value={d.index} className="bg-background">
-                  {d.name || `设备 ${d.index}`}
+                <option key={d.id} value={d.id} className="bg-background">
+                  {d.name || `设备 ${d.id}`}
                 </option>
               ))}
             </select>
@@ -111,13 +112,13 @@ export default function SettingsPanel() {
               onChange={(e) => {
                 const val = Number(e.target.value)
                 setSelectedPlayback(val)
-                handleSaveAudioDevice('playback', val)
+                handleSaveAudioDevice('translation_output', val)
               }}
               className="w-full px-3 py-2 rounded-lg bg-muted/40 border border-border text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-violet-500/40"
             >
               {loopbackDevices.map(d => (
-                <option key={d.index} value={d.index} className="bg-background">
-                  {d.name || `设备 ${d.index}`}
+                <option key={d.id} value={d.id} className="bg-background">
+                  {d.name || `设备 ${d.id}`}
                 </option>
               ))}
             </select>

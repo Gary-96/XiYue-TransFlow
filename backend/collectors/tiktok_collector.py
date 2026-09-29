@@ -140,12 +140,14 @@ class TikTokCollector(BaseCollector):
             # Set up event handlers
             self._setup_event_handlers()
 
-            # Start client (v6: start() returns asyncio.Task)
-            self._client_task = self.client.start(
-                process_connect_events=True,
-                fetch_room_info=True,
-                fetch_gift_info=True,
-                fetch_live_check=True,
+            # Start client (v7: start() is a coroutine -> wrap in a Task)
+            self._client_task = asyncio.ensure_future(
+                self.client.start(
+                    process_connect_events=True,
+                    fetch_room_info=True,
+                    fetch_gift_info=True,
+                    fetch_live_check=True,
+                )
             )
 
             # Wait for connection (30s timeout)

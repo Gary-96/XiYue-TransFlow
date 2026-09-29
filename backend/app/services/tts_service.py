@@ -6,7 +6,7 @@ import asyncio
 import logging
 import os
 from enum import Enum
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, AsyncGenerator
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -283,16 +283,25 @@ class TTSService:
         offset = int((rate - 1.0) * 100)
         return f"+{offset}%" if offset >= 0 else f"{offset}%"
 
-    async def synthesize(self, request: TTSRequest) -> bytes:
+    async def synthesize(
+        self,
+        request: TTSRequest,
+        stream: bool = False,
+    ) -> bytes | AsyncGenerator[bytes, None]:
         """
         执行 TTS 合成，返回音频字节流
         使用 Edge TTS（微软免费神经语音）
+
+        Args:
+            request: TTS 请求参数
+            stream: 是否以流式方式返回（True=返回 AsyncGenerator，False=返回完整 bytes）
+        Returns:
+            音频字节流或 AsyncGenerator
         """
         try:
             import edge_tts
 
             # 确定语音名称
-            # 先从预设/自定义查 edge_voice，否则用语言 code
             voice_id = request.voice_id
             edge_voice = None
 
@@ -323,12 +332,21 @@ class TTSService:
                 rate=self.get_edge_tts_rate(),
             )
 
-            audio_data = bytearray()
-            async for chunk in communicate.stream():
-                if chunk["type"] == "audio":
-                    audio_data.extend(chunk["data"])
+            if stream:
+                # 流式模式：返回生成器，前端可边接收边播放
+                async def _stream():
+                    async for chunk in communicate.stream():
+                        if chunk.get("type") == "audio":
+                            yield chunk.get("data", b"")
 
-            return bytes(audio_data)
+                return _stream()
+            else:
+                # 非流式模式：返回完整音频字节
+                audio_data = bytearray()
+                async for chunk in communicate.stream():
+                    if chunk.get("type") == "audio":
+                        audio_data.extend(chunk.get("data", b""))
+                return bytes(audio_data)
 
         except ImportError:
             logger.error("edge_tts not installed. Run: pip install edge-tts")

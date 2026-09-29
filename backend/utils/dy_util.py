@@ -1,30 +1,61 @@
 import hashlib
+import json
+import logging
+import os
+import random
 import re
 import sys
 import time
-import json
-import random
 import base64
 import urllib
-import os
-from os import path
+from functools import partial
 from typing import Tuple
 
 import requests
 requests.packages.urllib3.disable_warnings()
-import subprocess
-from functools import partial
+
+# Add static directory and node_modules to path for JS dependencies
+_STATIC_DIR = os.path.join(os.path.dirname(__file__), '..', 'static')
+_NODE_MODULES = os.path.join(_STATIC_DIR, 'node_modules')
+if _STATIC_DIR not in sys.path:
+    sys.path.insert(0, _STATIC_DIR)
+if _NODE_MODULES not in sys.path:
+    sys.path.insert(0, _NODE_MODULES)
+# Node.js child process module resolution (execjs spawns `node`)
+# — require('jsrsasign') resolves via NODE_PATH, independent of Python sys.path.
+existing_node_path = os.environ.get('NODE_PATH', '')
+parts = [p for p in existing_node_path.split(os.pathsep) if p]
+if _NODE_MODULES not in parts:
+    parts.append(_NODE_MODULES)
+os.environ['NODE_PATH'] = os.pathsep.join(parts)
 
 # Try to import execjs (or pyexecjs as fallback)
 try:
     import execjs
+    # Force use of Node.js runtime
+    execjs.runtime = 'Node'
 except ImportError:
     try:
         import pyexecjs as execjs  # type: ignore[no-redef]
+        execjs.runtime = 'Node'
     except ImportError:
         execjs = None  # type: ignore[assignment]
 
 import os
+
+# Cache for compiled JS signatures
+_js_cache: dict = {}
+
+
+def _load_js_script(name: str) -> str:
+    """Load a JS script from the static directory."""
+    script_dir = os.path.join(os.path.dirname(__file__), '..', 'static')
+    js_path = os.path.join(script_dir, name)
+    if not os.path.exists(js_path):
+        raise FileNotFoundError(f"JS script not found: {js_path}")
+    with open(js_path, 'r', encoding='utf-8') as f:
+        return f.read()
+
 
 def generate_ree_key(private_key: str) -> str:
     """Generate ree public key from private key (hex string)"""
@@ -67,10 +98,19 @@ def splice_url(url: str, params: dict) -> str:
     from urllib.parse import urlencode
     return f"{url}?{urlencode(params)}"
 
-def generate_a_bogus(url: str, *args, **kwargs) -> Tuple[str, str]:
-    """Generate a_bogus signature"""
-    # Simplified implementation
-    return '00000000', 'a_bogus=00000000'
+def generate_a_bogus(url: str, data: str = '') -> str:
+    """Generate real a_bogus signature using dy_ab.js via execjs."""
+    try:
+        js_code = _load_js_script('dy_ab.js')
+        ctx = execjs.compile(js_code)
+        result = ctx.call('get_ab', url, data or '')
+        if result:
+            return result
+    except Exception as e:
+        import logging
+        logging.warning(f"Failed to generate a_bogus via JS: {e}")
+    # Fallback
+    return '00000000'
 
 def generate_fake_webid() -> str:
     """Generate fake webid"""

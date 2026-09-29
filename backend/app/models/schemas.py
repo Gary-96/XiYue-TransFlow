@@ -3,7 +3,7 @@
 """
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
+from typing import Optional, List
 import time
 
 
@@ -18,6 +18,8 @@ class TranscriptionResult:
     language: str
     confidence: float
     timestamp: float = field(default_factory=time.time)
+    segments: List = field(default_factory=list)
+    is_final: bool = True
 
 
 @dataclass
@@ -57,3 +59,6 @@ class TranslationRequest:
     text: str
     source_language: str = "zh"
     target_language: str = "vi"
+
+
+# 移除重复定义，使用 tts_service 中的 TTSRequest

@@ -3,7 +3,7 @@
  */
 import { useEffect, useState } from 'react'
 import { Mic, RefreshCw, X } from 'lucide-react'
-import type { AudioDevice } from '@/types'
+import type { AudioDevice, AudioDeviceKey } from '@/types'
 
 interface SettingsSheetProps {
   open: boolean
@@ -27,13 +27,14 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps) {
   const loadDevices = async () => {
     setLoading(true); setError(null); setSaveMsg(null)
     try {
+      // 后端 list_all_devices() 直接返回 {inputs, outputs}，无 status 包裹
       const res = await fetch('http://127.0.0.1:15387/api/audio/devices').then(r => r.json())
-      if (res.status === 'success') {
-        setAudioDevices(res.devices || [])
-        setLoopbackDevices(res.loopback_devices || [])
-        setSelectedMic(res.devices?.[0]?.index ?? null)
-        setSelectedPlayback(res.loopback_devices?.[0]?.index ?? null)
-      }
+      setAudioDevices(res.inputs || [])
+      setLoopbackDevices(res.outputs || [])
+      const defInput = res.inputs?.find((d: AudioDevice) => d.is_default) ?? res.inputs?.[0]
+      const defOutput = res.outputs?.find((d: AudioDevice) => d.is_default) ?? res.outputs?.[0]
+      setSelectedMic(defInput?.id ?? null)
+      setSelectedPlayback(defOutput?.id ?? null)
     } catch { setError('加载设备列表失败，请确认后端服务已启动') }
     finally { setLoading(false) }
   }
@@ -51,7 +52,7 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps) {
     return () => clearInterval(t)
   }, [open])
 
-  const handleSaveDevice = async (key: string, id: number) => {
+  const handleSaveDevice = async (key: AudioDeviceKey, id: number) => {
     try {
       await fetch('http://127.0.0.1:15387/api/audio/device', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -99,16 +100,16 @@ export default function SettingsSheet({ open, onClose }: SettingsSheetProps) {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="flex items-center gap-1.5 text-xs text-foreground"><span className="text-muted-foreground">🎤</span>麦克风输入</label>
-                <select value={selectedMic ?? ''} onChange={(e) => { const v = Number(e.target.value); setSelectedMic(v); handleSaveDevice('mic', v) }}
+                <select value={selectedMic ?? ''} onChange={(e) => { const v = Number(e.target.value); setSelectedMic(v); handleSaveDevice('mic_input', v) }}
                   className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500/40">
-                  {audioDevices.map((d) => (<option key={d.index} value={d.index} className="bg-background">{d.name || `设备 ${d.index}`}</option>))}
+                  {audioDevices.map((d) => (<option key={d.id} value={d.id} className="bg-background">{d.name || `设备 ${d.id}`}</option>))}
                 </select>
               </div>
               <div className="space-y-1.5">
                 <label className="flex items-center gap-1.5 text-xs text-foreground"><span className="text-muted-foreground">🎧</span>监听输出</label>
-                <select value={selectedPlayback ?? ''} onChange={(e) => { const v = Number(e.target.value); setSelectedPlayback(v); handleSaveDevice('playback', v) }}
+                <select value={selectedPlayback ?? ''} onChange={(e) => { const v = Number(e.target.value); setSelectedPlayback(v); handleSaveDevice('translation_output', v) }}
                   className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-indigo-500/40">
-                  {loopbackDevices.map((d) => (<option key={d.index} value={d.index} className="bg-background">{d.name || `设备 ${d.index}`}</option>))}
+                  {loopbackDevices.map((d) => (<option key={d.id} value={d.id} className="bg-background">{d.name || `设备 ${d.id}`}</option>))}
                 </select>
               </div>
             </div>

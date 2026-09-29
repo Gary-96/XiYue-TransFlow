@@ -9,6 +9,7 @@ import type {
   CallSubtitle,
   ConnectionStatus,
   LanguageChangedMessage,
+  Platform,
   StreamMessage,
   TTSStatusMessage,
   VoiceChangedMessage,
@@ -41,17 +42,25 @@ class EventEmitter {
   }
 }
 
-// ── Stream WebSocket Hook ────────────────────────────────────────
+// ── 获取服务器地址 ────────────────────────────────────────────────
 
-export function useStreamWebSocket() {
+function getServerUrl(): string {
+  return localStorage.getItem('transflow.server.url') || 'http://127.0.0.1:15387'
+}
+
+// ── Stream WebSocket Hook ────────────────────────────────────────
+// 支持传入 platform 和 room_id，用于自动发送 subscribe 指令
+export function useStreamWebSocket(options?: { platform?: Platform; roomId?: string }) {
   const [messages, setMessages] = useState<StreamMessage[]>([])
   const [status, setStatus] = useState<ConnectionStatus>('disconnected')
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
   const retryCountRef = useRef(0)
   const MAX_RETRY_DELAY = 30000
-
   const eventEmitterRef = useRef<EventEmitter>(new EventEmitter())
+  const serverUrlRef = useRef(getServerUrl())
+  const optionsRef = useRef(options)
+  optionsRef.current = options
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return
@@ -61,13 +70,24 @@ export function useStreamWebSocket() {
     }
 
     setStatus('connecting')
-    const ws = new WebSocket('ws://127.0.0.1:15387/ws/stream')
+    const baseUrl = serverUrlRef.current
+    const wsUrl = baseUrl.replace(/^http:\//, 'ws://').replace(/^https:\//, 'wss://')
+    const ws = new WebSocket(`${wsUrl}/ws/stream`)
     wsRef.current = ws
 
     ws.onopen = () => {
       setStatus('connected')
       retryCountRef.current = 0
       console.log('[Stream WS] 已连接')
+      // 连接后立即发送 subscribe 指令
+      const opts = optionsRef.current
+      if (opts?.platform || opts?.roomId) {
+        ws.send(JSON.stringify({
+          type: 'subscribe',
+          platform: opts.platform || 'douyin',
+          room_id: opts.roomId || '',
+        }))
+      }
     }
 
     ws.onmessage = (event: MessageEvent) => {
@@ -94,7 +114,9 @@ export function useStreamWebSocket() {
           parsed.type !== 'voice_changed' &&
           parsed.type !== 'tts_status' &&
           parsed.type !== 'audio_spectrum' &&
-          parsed.type !== 'call_subtitle'
+          parsed.type !== 'call_subtitle' &&
+          parsed.type !== 'connection_established' &&
+          parsed.type !== 'pong'
         ) {
           setMessages(prev => [...prev.slice(-200), parsed as StreamMessage])
         }
@@ -118,6 +140,22 @@ export function useStreamWebSocket() {
       console.error('[Stream WS] 错误:', event)
     }
   }, [])
+
+  // 监听服务器地址变化，自动重连
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      const currentUrl = getServerUrl()
+      if (currentUrl !== serverUrlRef.current) {
+        console.log('[Stream WS] 服务器地址变化，重新连接')
+        serverUrlRef.current = currentUrl
+        if (wsRef.current) {
+          wsRef.current.close()
+        }
+        connect()
+      }
+    }, 2000)
+    return () => clearInterval(checkInterval)
+  }, [connect])
 
   const send = useCallback((data: Record<string, unknown>) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -201,6 +239,7 @@ export function useAudioWebSocket(micDeviceId?: string | null, remoteDeviceId?: 
   const spectrumCallbackRef = useRef<((data: number[]) => void) | null>(null)
   const micDeviceIdRef = useRef<string | null | undefined>(micDeviceId)
   const remoteDeviceIdRef = useRef<string | null | undefined>(remoteDeviceId)
+  const serverUrlRef = useRef(getServerUrl())
 
   // 设备变化时重启录音
   useEffect(() => {
@@ -218,6 +257,21 @@ export function useAudioWebSocket(micDeviceId?: string | null, remoteDeviceId?: 
   useEffect(() => {
     remoteDeviceIdRef.current = remoteDeviceId
   }, [remoteDeviceId])
+
+  // 监听服务器地址变化
+  useEffect(() => {
+    const checkInterval = setInterval(() => {
+      const currentUrl = getServerUrl()
+      if (currentUrl !== serverUrlRef.current) {
+        console.log('[Audio WS] 服务器地址变化，重新连接')
+        serverUrlRef.current = currentUrl
+        if (wsRef.current) {
+          wsRef.current.close()
+        }
+      }
+    }, 2000)
+    return () => clearInterval(checkInterval)
+  }, [])
 
   // TTS 控制
   const toggleTTSEnabled = useCallback(async (enabled: boolean) => {
@@ -268,7 +322,9 @@ export function useAudioWebSocket(micDeviceId?: string | null, remoteDeviceId?: 
       const processor = audioContext.createScriptProcessor(4096, 1, 1)
       processorRef.current = processor
 
-      const ws = new WebSocket('ws://127.0.0.1:15387/ws/audio')
+      const baseUrl = serverUrlRef.current
+      const wsUrl = baseUrl.replace(/^http:\/\//, 'ws://').replace(/^https:\/\//, 'wss://')
+      const ws = new WebSocket(`${wsUrl}/ws/audio`)
       ws.binaryType = 'arraybuffer'
       wsRef.current = ws
 

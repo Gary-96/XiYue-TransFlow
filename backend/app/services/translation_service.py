@@ -75,52 +75,53 @@ class BaseTranslator(TranslatorBackend):
 
 
 class GeminiTranslator(BaseTranslator):
-    """Google Gemini 翻译"""
-    
+    """Google Gemini 翻译（超低延时优化）"""
+
     name = "gemini"
     _model = None
-    
+
     def __init__(self):
         super().__init__()
         self._model = None
-    
+
     def _ensure_model(self) -> bool:
         """延迟初始化 Gemini 模型"""
         if self._model is not None:
             return True
-        
+
         api_key = self.get_api_key("gemini")
         if not api_key:
             logger.warning("Gemini API Key not configured")
             return False
-        
+
         try:
             import google.generativeai as genai
             genai.configure(api_key=api_key)
+            # 使用 flash 模型实现极速翻译
             model_name = self.get_model("gemini") or "gemini-1.5-flash"
             self._model = genai.GenerativeModel(model_name)
-            logger.info(f"Gemini model initialized: {model_name}")
+            logger.info(f"Gemini model initialized (low-latency): {model_name}")
             return True
         except Exception as e:
             logger.error(f"Failed to init Gemini model: {e}")
             return False
-    
+
     def reset(self):
         """重置模型（API Key 变更后调用）"""
         self._model = None
-    
+
     async def translate(self, text: str, source_lang: str, target_lang: str) -> Optional[str]:
-        """执行翻译"""
+        """执行翻译（使用 run_in_executor 避免阻塞事件循环）"""
         if not self._ensure_model():
             return None
-        
+
         prompt = self._build_prompt(text, source_lang, target_lang)
         loop = asyncio.get_running_loop()
-        
+
         def do_translate():
             response = self._model.generate_content(prompt)
             return response.text.strip()
-        
+
         try:
             translated = await loop.run_in_executor(None, do_translate)
             return translated if translated else None
@@ -255,17 +256,42 @@ class TranslationService:
         text: str,
         source_lang: str,
         target_lang: str,
+        is_partial: bool = False,
     ) -> Optional[str]:
-        """执行翻译"""
+        """
+        执行翻译（支持 Partial 流式翻译）
+
+        Args:
+            text: 待翻译文本
+            source_lang: 源语言
+            target_lang: 目标语言
+            is_partial: 是否为 Partial（中间）结果，True 时使用更短的超时
+        Returns:
+            翻译结果字符串或 None
+        """
         if not text or not text.strip():
             return None
-        
+
         backend = self._get_backend()
         if not backend.is_available():
             logger.error(f"Translation backend {backend.name} not available")
             return None
-        
-        return await backend.translate(text, source_lang, target_lang)
+
+        # Partial 结果使用更短的超时（0.5s vs 3s）
+        timeout = 0.5 if is_partial else 3.0
+
+        try:
+            translated = await asyncio.wait_for(
+                backend.translate(text, source_lang, target_lang),
+                timeout=timeout,
+            )
+            return translated if translated else None
+        except asyncio.TimeoutError:
+            logger.warning(f"Translation timeout ({timeout}s) for text: {text[:30]}...")
+            return None
+        except Exception as e:
+            logger.error(f"Translation error: {e}")
+            return None
     
     def reload_config(self):
         """配置变更后重新加载（重置 Gemini 缓存）"""

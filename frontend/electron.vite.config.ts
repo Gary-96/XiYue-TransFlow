@@ -37,6 +37,8 @@ export default defineConfig({
       rollupOptions: {
         input: {
           preload: resolve(__dirname, 'lib/preload/preload.ts'),
+          // Channel B 静默采集视口专用最小 preload（transflowSniffer.sendFrame）
+          snifferPreload: resolve(__dirname, 'lib/preload/snifferPreload.ts'),
         },
       },
     },

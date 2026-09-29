@@ -2,6 +2,7 @@
 乐曼同传 Leman Translate - API 路由模块
 按功能拆分路由，替代 main_manager.py 中的混合路由
 """
+import logging
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from typing import Dict, Any, Optional
 
@@ -233,6 +234,69 @@ async def clear_tts_queue(
     return {"status": "success"}
 
 
+from app.services.tts_service import TTSRequest
+import logging
+logger = logging.getLogger(__name__)
+
+
+@tts_router.post("/preview")
+async def preview_tts(
+    request: Dict[str, Any],
+    tts = Depends(get_tts_service),
+):
+    """TTS 试听接口 — 超低延时优化版：使用流式合成减少首包等待"""
+    try:
+        import base64
+        import io
+        from pydub import AudioSegment
+
+        text = request.get("text", "xin ye tong chuan, xin ye tong chuan")
+        voice_id = request.get("voice_id", "vi-VN-female-1")
+        speed = request.get("speed", 1.0)
+
+        # 获取音色配置
+        tts.set_voice(voice_id)
+        tts.update_params(speed=speed)
+
+        # 创建 TTSRequest 对象
+        tts_req = TTSRequest(text=text, voice_id=voice_id, lang="vi-VN", speed=speed)
+
+        # 合成音频（使用流式模式，更快返回首包）
+        audio_gen = await tts.synthesize(tts_req, stream=True)
+        audio_chunks = []
+        async for chunk in audio_gen:
+            audio_chunks.append(chunk)
+            # 快速判断是否已有足够数据（首包检测）
+            if len(b"".join(audio_chunks)) >= 32000:  # 约 1 秒 @24kHz 16bit
+                break
+
+        audio_data = b"".join(audio_chunks)
+        if not audio_data:
+            return {"status": "error", "message": "合成失败"}
+
+        # 截取前 2 秒
+        audio = AudioSegment.from_raw(io.BytesIO(audio_data), format="wav", sample_width=2, frame_rate=24000, channels=1)
+        preview = audio[:2000]  # 2000ms
+
+        # 转换为 MP3 并编码为 Base64
+        mp3_buffer = io.BytesIO()
+        preview.export(mp3_buffer, format="mp3")
+        mp3_bytes = mp3_buffer.getvalue()
+        base64_audio = base64.b64encode(mp3_bytes).decode('utf-8')
+
+        return {
+            "status": "success",
+            "audio_data": base64_audio,
+            "mime_type": "audio/mpeg",
+        }
+    except ImportError as e:
+        logger.error(f"TTS preview missing dependency: {e}")
+        return {"status": "error", "message": f"缺少依赖: {e}，请运行 pip install edge-tts"}
+    except Exception as e:
+        logger.error(f"TTS preview error: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+
 # ── 通话同传路由 ─────────────────────────────────────────────
 call_router = APIRouter(prefix="/api/call", tags=["通话同传"])
 
@@ -310,6 +374,89 @@ async def reset_call_stats():
         service.reset_stats()
         return {"status": "success"}
     except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+# ── 弹幕采集器控制路由 ───────────────────────────────────────
+collector_router = APIRouter(prefix="/api/collector", tags=["弹幕采集"])
+
+
+@collector_router.post("/connect")
+async def connect_collector(
+    request: Dict[str, str],
+    collector_manager = Depends(get_collector_manager),
+):
+    """连接弹幕采集器"""
+    try:
+        platform = request.get("platform", "douyin")
+        identifier = request.get("identifier", "")
+        
+        if not identifier:
+            return {"status": "error", "message": "identifier 不能为空"}
+        
+        # 获取 collector 实例
+        collector = collector_manager.collectors.get(platform)
+        if not collector:
+            return {"status": "error", "message": f"不支持的平台: {platform}"}
+        
+        result = await collector_manager.switch_platform(platform, identifier)
+        
+        if result.get("success"):
+            # 设置全局激活的 collector
+            from app.api.websocket import set_active_collector
+            await set_active_collector(collector)
+            
+            return {
+                "status": "success",
+                "platform": platform,
+                "identifier": identifier,
+                "message": result.get("message", "连接成功"),
+            }
+        else:
+            return {
+                "status": "error",
+                "message": result.get("error", "连接失败"),
+            }
+    except Exception as e:
+        logger.error(f"Failed to connect collector: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+
+@collector_router.post("/disconnect")
+async def disconnect_collector(
+    collector_manager = Depends(get_collector_manager),
+):
+    """断开弹幕采集器"""
+    try:
+        success = await collector_manager.stop_current_platform()
+        return {
+            "status": "success" if success else "error",
+            "message": "已断开连接" if success else "断开失败",
+        }
+    except Exception as e:
+        logger.error(f"Failed to disconnect collector: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+
+@collector_router.get("/status")
+async def get_collector_status(
+    collector_manager = Depends(get_collector_manager),
+):
+    """获取采集器状态"""
+    try:
+        status = collector_manager.get_global_stats()
+        active_platform = collector_manager.get_active_platform()
+        
+        return {
+            "status": "success",
+            "active_platform": active_platform,
+            "available_platforms": status.get("available_platforms", []),
+            "total_messages": status.get("total_messages", 0),
+            "total_errors": status.get("total_errors", 0),
+            "websocket_clients": status.get("websocket_clients", 0),
+        }
+    except Exception as e:
+        logger.error(f"Failed to get collector status: {e}", exc_info=True)
         return {"status": "error", "message": str(e)}
 
 
@@ -419,6 +566,7 @@ def register_routes(app):
     app.include_router(config_router)
     app.include_router(tts_router)
     app.include_router(call_router)
+    app.include_router(collector_router)
     app.include_router(platform_router)
     app.include_router(local_llm_router)
     print("[OK] API routes registered")

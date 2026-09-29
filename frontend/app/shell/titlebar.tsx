@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Minus, Square, Copy, X, Sun, Moon } from 'lucide-react'
+import { Minus, Square, Copy, X, Sun, Moon, Sparkles } from 'lucide-react'
 import { conveyor } from '@/conveyor/client'
 import { cn } from '@/lib/utils'
 import { useWindowStore } from './window-store'
@@ -22,8 +22,17 @@ export function Titlebar() {
       )}
     >
       <div className="flex items-center gap-2 pl-3 [-webkit-app-region:no-drag]">
-        {!isMac && <span className="size-3.25 rounded-lg bg-brand ring-[3px] ring-brand/20" />}
+        {!isMac && (
+          <span className="flex size-5 items-center justify-center rounded-md bg-brand ring-[3px] ring-brand/20">
+            <Sparkles className="size-3 text-foreground" />
+          </span>
+        )}
         <span className="text-[12px] font-semibold tracking-wide text-foreground/80">喜阅 TransFlow</span>
+        {!isMac && (
+          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium tabular-nums text-muted-foreground">
+            v2.0.0
+          </span>
+        )}
       </div>
 
       <div className="ml-auto flex items-center [-webkit-app-region:no-drag]">

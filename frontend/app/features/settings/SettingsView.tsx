@@ -86,7 +86,7 @@ function GeneralTab() {
         desc="后端 FastAPI 服务地址，默认 15387 端口"
       >
         <div className="flex items-center gap-2">
-          <input value={serverUrl} onChange={(e) => setServerUrl(e.target.value)}
+          <input value={serverUrl} onChange={(e) => { setServerUrl(e.target.value); localStorage.setItem('transflow.server.url', e.target.value) }}
             className="h-8 rounded-md border border-border bg-background px-3 text-xs text-foreground font-mono focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500/40 w-56"
           />
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -225,6 +225,15 @@ function AudioTab() {
 /* ═══════════════════════════════════════════════════════
    同传引擎
 ═══════════════════════════════════════════════════════ */
+async function playPreviewVoice(audioData: string, mimeType: string): Promise<void> {
+  const audio = new Audio(`data:${mimeType};base64,${audioData}`)
+  return new Promise<void>((resolve) => {
+    audio.onended = () => resolve()
+    audio.onerror = () => resolve()
+    audio.play().catch(() => resolve())
+  })
+}
+
 function EngineTab() {
   const [asrModel, setAsrModel] = useState('base')
   const [ttsVoice, setTtsVoice] = useState('female')
@@ -232,17 +241,24 @@ function EngineTab() {
   const [ttsVolume, setTtsVolume] = useState(0.8)
   const [playing, setPlaying] = useState(false)
 
-  const handlePreview = () => {
+  const handlePreview = async () => {
     setPlaying(true)
-    // 使用 Web Speech API 播放测试音频
-    const utter = new SpeechSynthesisUtterance('xin ye tong chuan, ni hao')
-    utter.lang = 'vi-VN'
-    utter.rate = speechRate
-    utter.volume = ttsVolume
-    utter.onend = () => setPlaying(false)
-    utter.onerror = () => setPlaying(false)
-    speechSynthesis.speak(utter)
-    setTimeout(() => setPlaying(false), 2500)
+    try {
+      const voiceId = ttsVoice === 'female' ? 'vi-VN-female-1' : 'vi-VN-male-1'
+      const res = await fetch('http://127.0.0.1:15387/api/tts/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ voice_id: voiceId, speed: speechRate }),
+      })
+      const data = await res.json()
+      if (data.status === 'success' && data.audio_data) {
+        await playPreviewVoice(data.audio_data, data.mime_type || 'audio/mpeg')
+      }
+    } catch (e) {
+      console.error('TTS preview failed:', e)
+    } finally {
+      setPlaying(false)
+    }
   }
 
   return (

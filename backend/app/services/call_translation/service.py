@@ -181,64 +181,111 @@ class CallTranslationService:
         await self._audio_processor.append(chunk)
 
     async def _process_loop(self):
-        """处理循环：ASR → 翻译 → TTS/广播"""
+        """处理循环：ASR → 翻译 → TTS/广播（超低延时流式版本）"""
         while self.state.is_running:
-            await asyncio.sleep(0.05)
+            await asyncio.sleep(0.02)  # 50ms 轮询间隔（原 50ms）
             chunk = await self._audio_processor.poll()
             if chunk is None:
                 continue
 
-            # ASR
+            # ASR 流式转录（支持 Partial 实时输出）
             if not self.whisper_service:
                 continue
             try:
-                transcription = await self.whisper_service.transcribe_audio(chunk, language=None)
-                if not transcription or not transcription.text.strip():
+                # 使用超低的 chunk 时长（1.5 秒），更早触发转录
+                result = await asyncio.to_thread(
+                    self.whisper_service.transcribe_audio,
+                    chunk.tobytes(),
+                    "",  # 空字符串表示自动检测
+                    False,  # Partial 模式，极低延时
+                )
+                if not result or not result.text.strip():
                     continue
-                text = transcription.text.strip()
+
+                # 立即广播 Partial 字幕（无需等待 Final）
+                await self._handle_asr_result(result)
+
+                # 如果是 Final，额外处理翻译和 TTS
+                if result.is_final:
+                    await self._handle_final_result(result)
+
             except Exception as e:
                 logger.error(f"[Call] ASR error: {e}")
                 self.state.error_count += 1
-                continue
 
-            # 翻译
-            if not self.translation_service or not self.language_manager:
-                continue
+    async def _handle_asr_result(self, result):
+        """处理 ASR 结果（Partial 实时广播）"""
+        if not result.text.strip():
+            return
+
+        # 广播 Partial 字幕给前端（无需翻译）
+        event = {
+            "type": "subtitle_partial",
+            "text": result.text,
+            "language": result.language,
+            "confidence": result.confidence,
+            "is_final": result.is_final,
+            "timestamp": _time.time(),
+        }
+        payload = json.dumps(event, ensure_ascii=False)
+        for client in list(self.websocket_clients):
             try:
-                pair = self.language_manager.get_current_pair()
-                src_lang = pair.src_lang
-                tgt_lang = pair.tgt_lang
-                translation = await self.translation_service.translate(
-                    text, src_lang=src_lang, tgt_lang=tgt_lang
-                )
-                if not translation:
-                    continue
+                await client.send_text(payload)
+            except Exception:
+                self.websocket_clients.discard(client)
 
-                tgt_text = translation.get("translated_text", "") or translation.get("text", "")
-                if not tgt_text.strip():
-                    continue
+        logger.debug(f"[Call] Partial ASR: {result.text[:30]}...")
 
-                self.state.translate_count += 1
-                self.state.last_translated_text = tgt_text
-                logger.info(f"[Call] [{src_lang}] {text} → [{tgt_lang}] {tgt_text}")
+    async def _handle_final_result(self, result):
+        """处理 Final ASR 结果（翻译 + TTS）"""
+        text = result.text.strip()
 
-                await self._broadcast_subtitle(text, tgt_text, src_lang, tgt_lang)
+        # 翻译
+        if not self.translation_service or not self.language_manager:
+            return
+        try:
+            pair = self.language_manager.get_current_pair()
+            src_lang = pair.src_lang
+            tgt_lang = pair.tgt_lang
 
-                if self.state.mode == CallMode.TTS_AUTO and self.tts_service:
-                    await self._speak_translation(tgt_text, tgt_lang)
+            # 流式翻译（支持 Partial 快速响应）
+            translation = await self.translation_service.translate(
+                text,
+                source_lang=src_lang,
+                target_lang=tgt_lang,
+                is_partial=False,  # Final 翻译使用完整超时
+            )
+            if not translation:
+                return
 
-            except Exception as e:
-                logger.error(f"[Call] Translation error: {e}")
-                self.state.error_count += 1
+            tgt_text = translation.get("translated_text", "") or translation.get("text", "")
+            if not tgt_text.strip():
+                return
+
+            self.state.translate_count += 1
+            self.state.last_translated_text = tgt_text
+            logger.info(f"[Call] [{src_lang}] {text} → [{tgt_lang}] {tgt_text}")
+
+            # 广播最终字幕（含译文）
+            await self._broadcast_subtitle(text, tgt_text, src_lang, tgt_lang)
+
+            # TTS 播报
+            if self.state.mode == CallMode.TTS_AUTO and self.tts_service:
+                await self._speak_translation(tgt_text, tgt_lang)
+
+        except Exception as e:
+            logger.error(f"[Call] Translation error: {e}")
+            self.state.error_count += 1
 
     async def _broadcast_subtitle(self, src_text: str, tgt_text: str, src_lang: str, tgt_lang: str):
-        """向 WebSocket 客户端广播字幕"""
+        """向 WebSocket 客户端广播字幕（含 is_final 标志）"""
         event = {
             "type": "call_subtitle",
             "src_text": src_text,
             "tgt_text": tgt_text,
             "src_lang": src_lang,
             "tgt_lang": tgt_lang,
+            "is_final": True,
             "timestamp": _time.time(),
         }
         payload = json.dumps(event, ensure_ascii=False)
@@ -249,19 +296,73 @@ class CallTranslationService:
                 self.websocket_clients.discard(client)
 
     async def _speak_translation(self, text: str, lang: str):
-        """合成并播放 TTS"""
+        """合成并播放 TTS（超低延时流式版本）"""
         if not self.tts_service:
             return
         try:
+            # 使用流式 TTS 合成，首包更快
+            import asyncio
+
             loop = asyncio.get_running_loop()
-            audio_bytes = await loop.run_in_executor(
-                None, lambda: self.tts_service.speak(text, lang)  # type: ignore
+
+            # 创建 TTSRequest
+            from app.services.tts_service import TTSRequest
+            tts_req = TTSRequest(
+                text=text,
+                voice_id=self.tts_service.current_voice.id if self.tts_service.current_voice else "vi-VN-female-1",
+                lang=lang,
+                speed=self.tts_service.current_voice.speed if self.tts_service.current_voice else 1.0,
             )
-            if audio_bytes:
-                self._play_audio(audio_bytes)
+
+            # 流式合成音频
+            audio_result = await self.tts_service.synthesize(tts_req, stream=True)
+
+            # 处理返回结果（可能是 bytes 或 AsyncGenerator）
+            if isinstance(audio_result, bytes):
+                audio_data = audio_result
+            else:
+                # AsyncGenerator
+                audio_chunks = []
+                async for chunk in audio_result:
+                    audio_chunks.append(chunk)
+                    # 当累积足够数据（约 1 秒音频）时开始播放
+                    if len(b"".join(audio_chunks)) >= 32000:
+                        break
+                audio_data = b"".join(audio_chunks)
+            if not audio_data:
+                return
+
+            # 后台播放音频
+            self._play_audio_async(audio_data)
+
         except Exception as e:
             logger.error(f"[Call] TTS error: {e}")
             self.state.error_count += 1
+
+    def _play_audio_async(self, audio_bytes: bytes):
+        """异步播放 TTS 音频（非阻塞）"""
+        import threading
+
+        def play():
+            try:
+                if not self.state.tts_playback_device:
+                    return
+                wf = io.BytesIO(audio_bytes)
+                with wave.open(wf, "rb") as wav:
+                    sr = wav.getframerate()
+                    chunk = int(sr * 0.05)
+                    data = wav.readframes(chunk)
+                    while data and self.state.is_running:
+                        np_data = np.frombuffer(data, dtype=np.int16).astype(np.float32) / 32768.0
+                        sd.play(np_data, sr, device=self.state.tts_playback_device)
+                        sd.wait()
+                        data = wav.readframes(chunk)
+            except Exception as e:
+                logger.error(f"[Call] Playback error: {e}")
+
+        # 在后台线程中播放，不阻塞主循环
+        thread = threading.Thread(target=play, daemon=True)
+        thread.start()
 
     def _play_audio(self, audio_bytes: bytes):
         """播放 TTS 音频"""

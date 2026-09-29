@@ -64,3 +64,6 @@ output/
 server/
 server/*.db
 server/__pycache__/
+
+# Windows 保留设备名垃圾文件（cmd 重定向误产）
+nul

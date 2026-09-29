@@ -109,6 +109,24 @@ export interface VoiceChangedMessage {
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected'
 
+// ── 双通道统一弹幕契约 ────────────────────────────────────────────
+// Channel A（Python 协议采集）与 Channel B（Electron 静默视口）
+// 的产出都归一化到该结构，供 ConnectionManager 去重与分发。
+
+export interface StandardDanmaku {
+  /** 去重键：Channel B 取 WebCast msgId；Channel A 取 类型|用户|文本 合成键 */
+  id: string
+  user: string
+  text: string
+  platform: string
+  /** 产生时刻（ms） */
+  timestamp: number
+  /** 归一化消息类型（缺省视为 comment） */
+  type?: DanmakuType
+  /** 产出通道 */
+  channel?: 'A' | 'B'
+}
+
 // ── 平台类型 ──────────────────────────────────────────────────────
 
 export type Platform = 'douyin' | 'tiktok'
@@ -124,10 +142,29 @@ export interface AuthState {
 // ── 音频设备 ──────────────────────────────────────────────────────
 
 export interface AudioDevice {
-  index: number
+  /** 设备索引号（sounddevice 编号） */
+  id: number
   name: string
-  hostApi: string
+  is_default?: boolean
+  channels?: number
+  driver?: string
+  hostapi?: string
+  is_pro_device?: boolean
+  direction?: 'input' | 'output'
 }
+
+/** GET /api/audio/devices 响应：按方向分组，字段与后端 list_all_devices() 对齐 */
+export interface AudioDevicesResponse {
+  inputs: AudioDevice[]
+  outputs: AudioDevice[]
+}
+
+/** 后端 set_audio_device 接受的 device_key 合法集合 */
+export type AudioDeviceKey =
+  | 'mic_input'
+  | 'translation_output'
+  | 'remote_input'
+  | 'remote_output'
 
 export interface CallDevicesResponse {
   mic_devices: AudioDevice[]

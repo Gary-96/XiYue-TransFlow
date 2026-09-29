@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu } from 'electron'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { openAppWindow } from './app'
 import { registerResourcesProtocol } from './protocols'
+import { destroySniffer } from './sniffer'
 
 // Chromium only auto-detects a keyring on desktops it recognizes, so on anything else (Hyprland,
 // sway, bare WMs) safeStorage silently degrades to `basic_text` and reports itself unavailable.
@@ -49,6 +50,11 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+// 退出前释放静默采集视口（Channel B），避免隐藏窗口与 partition 会话残留
+app.on('will-quit', () => {
+  destroySniffer()
 })
 
 // In this file, you can include the rest of your app's specific main process

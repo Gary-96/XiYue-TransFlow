@@ -2,7 +2,7 @@
  * 主视口布局 — 双流并排工作台
  * 顶部指标栏(紧凑一行) | 中部双视口(左40%弹幕 / 右60%字幕+频谱) | 底部控制坞
  */
-import { Server, Radio, Users, Heart, Mic, RefreshCw, Settings } from 'lucide-react'
+import { Server, Radio, Users, Heart, Mic, RefreshCw, Settings, Shield } from 'lucide-react'
 import type { ConnectionStatus, StreamMessage, CallSubtitle } from '@/types'
 import AudioSpectrum from '@/features/subtitle/AudioSpectrum'
 import DanmakuPanel from '@/features/danmaku/DanmakuPanel'
@@ -17,6 +17,8 @@ interface MainViewProps {
   messages: StreamMessage[]
   callHistory: CallSubtitle[]
   spectrumData?: number[]
+  /** 双模采集通道状态文案（null 不显示） */
+  channelLabel?: string | null
   onStartRecognition: () => void
   onToggleTTS: (enabled: boolean) => void
   onClearMessages: () => void
@@ -48,7 +50,7 @@ const MetricCard = ({
 
 export default function MainView({
   wsStatus, engineStatus, ttsEnabled, isTTSSpeaking,
-  messageCount, messages, callHistory, spectrumData,
+  messageCount, messages, callHistory, spectrumData, channelLabel,
   onStartRecognition, onToggleTTS, onClearMessages, onOpenConfig,
 }: MainViewProps) {
   return (
@@ -57,6 +59,9 @@ export default function MainView({
       <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-background">
         <MetricCard icon={Server} label="引擎" value={engineStatus === 'ok' ? '15387 ✓' : engineStatus} status={engineStatus === 'ok' ? 'ok' : 'error'} />
         <MetricCard icon={Radio} label="WebSocket" value={wsStatus === 'connected' ? '已连接' : wsStatus === 'connecting' ? '连接中...' : '断开'} status={wsStatus === 'connected' ? 'ok' : wsStatus === 'connecting' ? 'warn' : 'error'} />
+        {channelLabel && (
+          <MetricCard icon={Shield} label="采集通道" value={channelLabel} status={channelLabel.includes('安全') ? 'warn' : 'ok'} />
+        )}
         <MetricCard icon={Users} label="弹幕" value={String(messageCount)} status="idle" />
         <MetricCard icon={Heart} label="TTS" value={isTTSSpeaking ? '播放中' : ttsEnabled ? '已启用' : '关闭'} status={isTTSSpeaking ? 'ok' : ttsEnabled ? 'warn' : 'idle'} />
         <div className="flex-1" />
