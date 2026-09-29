@@ -1,8 +1,8 @@
 /**
- * 主视口布局
- * 顶部指标卡 + 中部内容区 + 底部主控栏
+ * 主视口布局 — 双流并排工作台
+ * 顶部指标栏(紧凑一行) | 中部双视口(左40%弹幕 / 右60%字幕+频谱) | 底部控制坞
  */
-import { Server, Radio, Users, Heart, MessageSquare, Mic, RefreshCw, Settings } from 'lucide-react'
+import { Server, Radio, Users, Heart, Mic, RefreshCw, Settings } from 'lucide-react'
 import type { ConnectionStatus, StreamMessage, CallSubtitle } from '@/types'
 import AudioSpectrum from '@/features/subtitle/AudioSpectrum'
 import DanmakuPanel from '@/features/danmaku/DanmakuPanel'
@@ -17,13 +17,12 @@ interface MainViewProps {
   messages: StreamMessage[]
   callHistory: CallSubtitle[]
   spectrumData?: number[]
-  activeTab: 'danmaku' | 'subtitle' | 'audio' | 'settings' | 'about'
   onStartRecognition: () => void
   onToggleTTS: (enabled: boolean) => void
   onClearMessages: () => void
-  onOpenSettings: () => void
 }
 
+/* ─── MetricCard ─── */
 const MetricCard = ({
   icon: Icon,
   label,
@@ -41,7 +40,6 @@ const MetricCard = ({
     error: 'text-red-500',
     idle: 'text-muted-foreground',
   }[status ?? 'idle']
-
   const bgColor = {
     ok: 'bg-emerald-500/10',
     warn: 'bg-amber-500/10',
@@ -50,45 +48,45 @@ const MetricCard = ({
   }[status ?? 'idle']
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5">
-      <div className={`flex h-7 w-7 items-center justify-center rounded-md ${bgColor}`}>
-        <Icon className={`h-3.5 w-3.5 ${statusColor}`} />
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-2.5 py-1.5">
+      <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${bgColor}`}>
+        <Icon className={`h-3 w-3 ${statusColor}`} />
       </div>
-      <div className="flex-1 min-w-0">
-        <div className="text-[10px] text-muted-foreground">{label}</div>
-        <div className={`text-xs font-medium ${statusColor}`}>{value}</div>
+      <div className="min-w-0">
+        <div className="text-[10px] text-muted-foreground truncate">{label}</div>
+        <div className={`text-xs font-medium ${statusColor} truncate`}>{value}</div>
       </div>
     </div>
   )
 }
 
+/* ─── 主组件 ─── */
 export default function MainView({
   wsStatus,
   engineStatus,
   ttsEnabled,
   isTTSSpeaking,
+  messageCount,
   messages,
   callHistory,
   spectrumData,
-  activeTab,
   onStartRecognition,
   onToggleTTS,
   onClearMessages,
-  onOpenSettings,
 }: MainViewProps) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* 顶部指标栏 */}
-      <div className="grid grid-cols-4 gap-2 p-3">
+      {/* 顶部指标栏（紧凑一行） */}
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b border-border bg-background">
         <MetricCard
           icon={Server}
-          label="本地引擎"
+          label="引擎"
           value={engineStatus === 'ok' ? '15387 ✓' : engineStatus}
           status={engineStatus === 'ok' ? 'ok' : 'error'}
         />
         <MetricCard
           icon={Radio}
-          label="网络 WS"
+          label="WebSocket"
           value={
             wsStatus === 'connected' ? '已连接' :
             wsStatus === 'connecting' ? '连接中...' : '断开'
@@ -97,99 +95,87 @@ export default function MainView({
         />
         <MetricCard
           icon={Users}
-          label="会话计数"
-          value={String(messages.length)}
+          label="弹幕"
+          value={String(messageCount)}
           status="idle"
         />
         <MetricCard
           icon={Heart}
-          label="TTS 状态"
-          value={isTTSSpeaking ? '播放中' : ttsEnabled ? '已启用' : '已关闭'}
+          label="TTS"
+          value={isTTSSpeaking ? '播放中' : ttsEnabled ? '已启用' : '关闭'}
           status={isTTSSpeaking ? 'ok' : ttsEnabled ? 'warn' : 'idle'}
         />
       </div>
 
-      {/* 主内容区 */}
-      <div className="flex flex-1 gap-2 px-3 pb-2">
-        {activeTab === 'danmaku' && (
-          <div className="flex-1 overflow-hidden rounded-lg border border-border bg-card">
+      {/* 双视口并排（各占满剩余高度） */}
+      <div className="flex flex-1 gap-px overflow-hidden bg-border">
+        {/* 左：弹幕流 40% */}
+        <div className="flex flex-col min-w-0" style={{ width: '40%' }}>
+          <div className="px-3 py-1.5 border-b border-border bg-card/60">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              💬 弹幕流 · {messageCount} 条
+            </span>
+          </div>
+          <div className="flex-1 overflow-hidden bg-card">
             <DanmakuPanel messages={messages} />
           </div>
-        )}
+        </div>
 
-        {activeTab === 'subtitle' && (
-          <div className="flex-1 overflow-hidden rounded-lg border border-border bg-card">
-            <SubtitlePanel subtitles={callHistory} />
-          </div>
-        )}
-
-        {(activeTab === 'audio' || activeTab === 'settings' || activeTab === 'about') && (
-          <div className="flex-1 overflow-hidden rounded-lg border border-border bg-card p-4">
-            <div className="h-full flex flex-col items-center justify-center gap-3 text-muted-foreground">
-              <div className="w-12 h-12 rounded-full bg-muted/40 border border-border flex items-center justify-center">
-                {activeTab === 'audio' && <Mic className="w-6 h-6 text-muted-foreground" />}
-                {activeTab === 'settings' && <Settings className="w-6 h-6 text-muted-foreground" />}
-                {activeTab === 'about' && <MessageSquare className="w-6 h-6 text-muted-foreground" />}
-              </div>
-              <div className="text-sm font-medium text-foreground">
-                {activeTab === 'audio' && '音频设备设置'}
-                {activeTab === 'settings' && '模型设置'}
-                {activeTab === 'about' && '关于应用'}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {activeTab === 'audio' && '选择麦克风和扬声器设备'}
-                {activeTab === 'settings' && '配置 Whisper 模型参数'}
-                {activeTab === 'about' && '喜阅 TransFlow v2.0'}
-              </div>
+        {/* 右：字幕流 60% */}
+        <div className="flex flex-col min-w-0" style={{ width: '60%' }}>
+          <div className="px-3 py-1.5 border-b border-border bg-card/60 flex items-center justify-between">
+            <span className="text-[11px] font-medium text-muted-foreground">
+              📝 同传字幕 · {callHistory.length} 条
+            </span>
+            {/* 频谱在字幕区右上角 */}
+            <div className="h-6 flex-1 max-w-[180px] ml-3">
+              <AudioSpectrum height={24} spectrumData={spectrumData} />
             </div>
           </div>
-        )}
+          <div className="flex-1 overflow-hidden bg-card">
+            <SubtitlePanel subtitles={callHistory} />
+          </div>
+        </div>
       </div>
 
-      {/* 底部主控栏 */}
-      <div className="flex items-center gap-3 px-3 py-2">
-        {/* 左侧控制 */}
-        <div className="flex items-center gap-2">
+      {/* 底部控制坞（Dock 悬浮条） */}
+      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-t border-border bg-card/80 backdrop-blur-md">
+        {/* 左：核心操作 */}
+        <div className="flex items-center gap-1.5">
           <button
             onClick={onStartRecognition}
-            className="flex h-9 items-center gap-1.5 rounded-md bg-indigo-600 px-4 text-xs font-medium text-white transition-colors hover:bg-indigo-500 active:scale-[0.98]"
+            className="flex h-8 items-center gap-1.5 rounded-lg bg-indigo-600 px-3 text-xs font-medium text-white transition-all hover:bg-indigo-500 active:scale-[0.97]"
           >
             <Mic className="h-3.5 w-3.5" />
             开始识别
           </button>
           <button
             onClick={() => onToggleTTS(!ttsEnabled)}
-            className={`flex h-9 items-center gap-1.5 rounded-md px-4 text-xs font-medium transition-colors active:scale-[0.98] ${
+            className={`flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium transition-all active:scale-[0.97] ${
               ttsEnabled
                 ? 'border border-emerald-500/30 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20'
-                : 'border border-input text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                : 'border border-border bg-card text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             }`}
           >
             <Heart className={`h-3.5 w-3.5 ${isTTSSpeaking ? 'animate-pulse' : ''}`} />
-            TTS {ttsEnabled ? '已开启' : '已关闭'}
+            TTS {ttsEnabled ? '开' : '关'}
           </button>
         </div>
 
-        {/* 中间：频谱展示 */}
-        <div className="flex-1">
-          <AudioSpectrum
-            height={40}
-            spectrumData={spectrumData}
-          />
-        </div>
+        <div className="flex-1" />
 
-        {/* 右侧辅助 */}
-        <div className="flex items-center gap-2">
+        {/* 右：辅助操作 */}
+        <div className="flex items-center gap-1">
           <button
             onClick={onClearMessages}
-            className="flex h-8 items-center gap-1.5 rounded-md px-3 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.98]"
+            className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.97]"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             清空
           </button>
           <button
-            onClick={onOpenSettings}
-            className="flex h-8 items-center gap-1.5 rounded-md px-3 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.98]"
+            className="flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground active:scale-[0.97]"
+            title="设置"
           >
             <Settings className="h-3.5 w-3.5" />
             设置

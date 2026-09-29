@@ -6,13 +6,12 @@ import { useState, useEffect } from 'react'
 import { useStreamWebSocket, useAudioWebSocket } from '../../hooks/useWebSocket'
 import type { Platform } from '../../types'
 import MainView from './MainView'
-
-type ActiveTab = 'danmaku' | 'subtitle' | 'audio' | 'settings' | 'about'
+import SettingsSheet from '../settings/SettingsSheet'
+import AboutDialog from '../about/AboutDialog'
 
 interface DashboardProps {}
 
 export default function Dashboard(_props: DashboardProps) {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('danmaku')
   const [platform, setPlatform] = useState<Platform>('douyin')
   const [roomId, setRoomId] = useState('')
   const [isConnecting, setIsConnecting] = useState(false)
@@ -20,6 +19,9 @@ export default function Dashboard(_props: DashboardProps) {
   const [srcLang, setSrcLang] = useState('zh')
   const [tgtLang, setTgtLang] = useState('vi')
   const [engineStatus, setEngineStatus] = useState('checking')
+
+  const [showSettings, setShowSettings] = useState(false)
+  const [showAbout, setShowAbout] = useState(false)
 
   // WebSocket 连接
   const { messages, status: wsStatus, clearMessages } = useStreamWebSocket()
@@ -103,56 +105,36 @@ export default function Dashboard(_props: DashboardProps) {
     clearMessages()
   }
 
-  const handleOpenSettings = () => {
-    setActiveTab('settings')
-  }
-
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
-      {/* Sidebar */}
-      <aside className="flex w-48 shrink-0 flex-col border-r border-border bg-background">
-        {/* 导航列表 */}
-        <nav className="flex-1 space-y-1.5 p-3">
-          {[
-            { key: 'danmaku', label: '弹幕同传', icon: '💬' },
-            { key: 'subtitle', label: '同传字幕', icon: '📝' },
-            { key: 'audio', label: '音频设备', icon: '🎤' },
-            { key: 'settings', label: '模型设置', icon: '⚙️' },
-            { key: 'about', label: '关于应用', icon: 'ℹ️' },
-          ].map((item) => (
-            <button
-              key={item.key}
-              onClick={() => setActiveTab(item.key as ActiveTab)}
-              className={`relative flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-xs transition-all duration-150 ${
-                activeTab === item.key
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-              }`}
-            >
-              {activeTab === item.key && (
-                <div className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]" />
-              )}
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
+      {/* 左侧窄边栏 */}
+      <aside className="flex w-12 shrink-0 flex-col items-center border-r border-border bg-background py-3">
+        {/* 顶部品牌图标 */}
+        <div className="mb-4 flex h-7 w-7 items-center justify-center rounded-lg bg-brand ring-[3px] ring-brand/20">
+          <span className="text-[10px] font-bold text-white">X</span>
+        </div>
 
-        {/* 底部状态 */}
-        <div className="space-y-2 p-3">
-          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/40 px-3 py-2">
-            <span className="text-[11px] text-muted-foreground">WebSocket</span>
-            <span className={`text-[11px] font-medium ${
-              wsStatus === 'connected' ? 'text-emerald-500' :
-              wsStatus === 'connecting' ? 'text-amber-500' :
-              'text-muted-foreground'
-            }`}>
-              {wsStatus === 'connected' ? '已连接' : wsStatus === 'connecting' ? '连接中...' : '断开'}
-            </span>
-          </div>
-          <div className="text-[10px] text-muted-foreground text-center">
-            v2.0 Pro · {messages.length} 条消息
-          </div>
+        <div className="flex-1" />
+
+        {/* 底部固定图标 */}
+        <div className="flex flex-col items-center gap-2">
+          <button
+            onClick={() => setShowSettings(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="设置"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43.25a2 2 0 0 1-1 1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setShowAbout(true)}
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="关于"
+          >
+            <span className="text-sm font-semibold leading-none">i</span>
+          </button>
         </div>
       </aside>
 
@@ -229,25 +211,25 @@ export default function Dashboard(_props: DashboardProps) {
           </div>
         </header>
 
-        {/* 主视口 */}
-        <main className="min-h-0 flex-1 overflow-hidden">
-          <MainView
-            wsStatus={wsStatus}
-            engineStatus={engineStatus}
-            ttsEnabled={ttsEnabled}
-            isTTSSpeaking={isTTSSpeaking}
-            messageCount={messages.length}
-            messages={messages}
-            callHistory={callHistory}
-            spectrumData={[]}
-            activeTab={activeTab}
-            onStartRecognition={handleStartRecognition}
-            onToggleTTS={handleToggleTTS}
-            onClearMessages={handleClearMessages}
-            onOpenSettings={handleOpenSettings}
-          />
-        </main>
+        {/* 主视口：双列并排 */}
+        <MainView
+          wsStatus={wsStatus}
+          engineStatus={engineStatus}
+          ttsEnabled={ttsEnabled}
+          isTTSSpeaking={isTTSSpeaking}
+          messageCount={messages.length}
+          messages={messages}
+          callHistory={callHistory}
+          spectrumData={[]}
+          onStartRecognition={handleStartRecognition}
+          onToggleTTS={handleToggleTTS}
+          onClearMessages={handleClearMessages}
+        />
       </div>
+
+      {/* 弹窗 */}
+      <SettingsSheet open={showSettings} onClose={() => setShowSettings(false)} />
+      <AboutDialog open={showAbout} onClose={() => setShowAbout(false)} />
     </div>
   )
 }
