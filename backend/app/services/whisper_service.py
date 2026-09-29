@@ -1,5 +1,5 @@
-"""
-乐曼同传 — Whisper ASR 服务（超低延时优化版）
+﻿"""
+喜阅 TransFlow — Whisper ASR 服务（超低延时优化版）
 基于 faster-whisper (CTranslate2)，支持 VAD 实时切片和流式 Partial 转录
 """
 import asyncio
@@ -337,3 +337,4 @@ def get_whisper_service() -> WhisperService:
 
 
 __all__ = ["WhisperService", "get_whisper_service", "TranscriptionResult", "TranscriptionSegment"]
+

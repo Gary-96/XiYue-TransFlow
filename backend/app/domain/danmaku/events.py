@@ -1,5 +1,5 @@
-"""
-乐曼同传 · Domain 层 - 弹幕领域事件
+﻿"""
+喜阅 TransFlow · Domain 层 - 弹幕领域事件
 职责：定义统一事件契约，与平台无关。
 """
 from __future__ import annotations
@@ -153,3 +153,4 @@ class CollectorStatusChangedEvent:
             "error_message": self.error_message,
             "timestamp": self.occurred_at.timestamp(),
         }
+

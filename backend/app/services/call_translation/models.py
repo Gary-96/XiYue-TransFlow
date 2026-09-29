@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 通话同传数据模型
+﻿"""
+喜阅 TransFlow — 通话同传数据模型
 """
 import asyncio
 import logging
@@ -52,3 +52,4 @@ class CallTranslationState:
 
 
 __all__ = ["CallMode", "CallTranslationState"]
+

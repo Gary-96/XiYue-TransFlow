@@ -78,9 +78,9 @@ class Params:
         return self
 
     def with_a_bogus(self, data=None):
-        query = splice_url(self.get())
+        query = splice_url("", self.get())
         if data is not None:
-            data = splice_url(data)
+            data = splice_url("", data) if isinstance(data, dict) else data
         else:
             data = ''
         abogus = generate_a_bogus(query, data)

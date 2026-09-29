@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 服务层导出
+﻿"""
+喜阅 TransFlow — 服务层导出
 """
 # 注意：依赖 numpy/sounddevice 等服务仅在运行时按需导入，避免启动时依赖缺失报错
 
@@ -36,3 +36,4 @@ __all__ = [
     "get_language_manager",
     "get_llm_service",
 ]
+

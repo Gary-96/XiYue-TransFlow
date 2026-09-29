@@ -99,18 +99,17 @@ def splice_url(url: str, params: dict) -> str:
     return f"{url}?{urlencode(params)}"
 
 def generate_a_bogus(url: str, data: str = '') -> str:
-    """Generate real a_bogus signature using dy_ab.js via execjs."""
-    try:
-        js_code = _load_js_script('dy_ab.js')
-        ctx = execjs.compile(js_code)
-        result = ctx.call('get_ab', url, data or '')
-        if result:
-            return result
-    except Exception as e:
-        import logging
-        logging.warning(f"Failed to generate a_bogus via JS: {e}")
-    # Fallback
-    return '00000000'
+    """Generate real a_bogus signature using dy_ab.js via execjs.
+    
+    Raises:
+        RuntimeError: If signature generation fails
+    """
+    js_code = _load_js_script('dy_ab.js')
+    ctx = execjs.compile(js_code)
+    result = ctx.call('get_ab', url, data or '')
+    if not result:
+        raise RuntimeError("a_bogus generation failed: empty result from JavaScript")
+    return result
 
 def generate_fake_webid() -> str:
     """Generate fake webid"""

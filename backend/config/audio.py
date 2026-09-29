@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 音频设备配置
+﻿"""
+喜阅 TransFlow — 音频设备配置
 负责 4 路独立音频设备的路由管理
 """
 import logging
@@ -62,3 +62,4 @@ class AudioConfig:
     def to_dict(self) -> Dict[str, Optional[int]]:
         """序列化为字典"""
         return {**self._devices, "audio_device_id": self._mic_input}
+

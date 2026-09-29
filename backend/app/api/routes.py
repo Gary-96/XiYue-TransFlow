@@ -1,5 +1,5 @@
-"""
-乐曼同传 Leman Translate - API 路由模块
+﻿"""
+喜阅 TransFlow - API 路由模块
 按功能拆分路由，替代 main_manager.py 中的混合路由
 """
 import logging
@@ -466,24 +466,23 @@ platform_router = APIRouter(prefix="/api/platform", tags=["平台"])
 
 @platform_router.get("/status")
 async def get_platform_status(
-    config = Depends(get_config_manager),
+    manager: CollectorManager = Depends(get_collector_manager),
 ):
-    """获取平台连接状态"""
+    """获取平台连接状态（通过依赖注入获取单例）"""
     try:
-        # 直接创建管理器实例（不再依赖 app.state）
-        from collectors.manager import CollectorManager
-        cm = CollectorManager()
-        status = {}
-        for platform, collector in cm.collectors.items():
-            status[platform] = {
-                "connected": collector.is_connected if hasattr(collector, 'is_connected') else False,
-            }
+        status = manager.get_status()
         return {
             "status": "ok",
-            "connected": any(s.get("connected", False) for s in status.values()),
-            "platforms": status,
+            "connected": status.get("active_platform") is not None,
+            "platforms": {
+                p: {"connected": False} 
+                for p in manager.get_available_platforms()
+            },
+            "active_platform": status.get("active_platform"),
+            "room_id": status.get("active_room_id"),
         }
     except Exception as e:
+        logger.error(f"Failed to get platform status: {e}")
         return {
             "status": "error",
             "message": str(e),
@@ -570,3 +569,4 @@ def register_routes(app):
     app.include_router(platform_router)
     app.include_router(local_llm_router)
     print("[OK] API routes registered")
+

@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 通话同传服务
+﻿"""
+喜阅 TransFlow — 通话同传服务
 整合音频捕获、处理、翻译、TTS 的完整流程
 """
 import asyncio
@@ -395,3 +395,4 @@ def get_call_translation_service() -> CallTranslationService:
 
 
 __all__ = ["CallTranslationService", "get_call_translation_service"]
+

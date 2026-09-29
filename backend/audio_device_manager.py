@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 音频设备管理器
+﻿"""
+喜阅 TransFlow — 音频设备管理器
 枚举系统声卡/麦克风输入设备 & 输出设备，支持专业设备识别
 """
 import logging
@@ -245,3 +245,4 @@ def validate_device(device_id: int) -> Dict[str, Any]:
             
     except Exception as e:
         return {"valid": False, "message": f"校验失败: {str(e)}", "device": None}
+

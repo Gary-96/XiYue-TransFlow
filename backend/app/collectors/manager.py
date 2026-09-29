@@ -1,5 +1,5 @@
-"""
-乐曼同传 · CollectorManager - 统一采集器管理器
+﻿"""
+喜阅 TransFlow · CollectorManager - 统一采集器管理器
 职责：管理采集器生命周期，通过 EventBus 分发事件
 不再直接持有 WebSocket，不再直接调用翻译/AI
 """
@@ -21,6 +21,9 @@ from .registry import CollectorRegistry, get_global_registry
 logger = logging.getLogger(__name__)
 
 
+
+from .registry_auto import register_all_collectors
+
 class CollectorManager:
     """
     统一采集器管理器。
@@ -38,6 +41,10 @@ class CollectorManager:
         # 当前活跃采集器
         self._active_collector: Optional[BaseCollector] = None
         self._active_platform: Optional[str] = None
+        
+        # 自动注册所有平台
+        register_all_collectors(self._registry)
+
 
         # 全局统计
         self._global_stats = {
@@ -207,3 +214,4 @@ def create_collector_manager(
 ) -> CollectorManager:
     """工厂函数"""
     return CollectorManager(registry=registry, event_bus=event_bus)
+

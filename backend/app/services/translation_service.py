@@ -1,5 +1,5 @@
-"""
-乐曼同传 Leman Translate - 翻译后端
+﻿"""
+喜阅 TransFlow - 翻译后端
 参考 Voicebox 架构，实现多翻译引擎
 """
 import asyncio
@@ -311,3 +311,4 @@ class TranslationService:
             "api_key_configured": bool(self._config.get_api_key(provider)),
             "available_providers": list(self._backends.keys()),
         }
+

@@ -1,5 +1,5 @@
-"""
-乐曼同传 · Domain 层 - 弹幕实体
+﻿"""
+喜阅 TransFlow · Domain 层 - 弹幕实体
 """
 from __future__ import annotations
 
@@ -33,3 +33,4 @@ class RoomStats:
     like_count: int
     follow_count: int
     metadata: dict = field(default_factory=dict)
+

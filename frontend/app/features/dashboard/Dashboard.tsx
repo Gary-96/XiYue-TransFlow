@@ -5,7 +5,7 @@
  * 底部固定：设置 / 关于弹窗
  */
 import { useState, useEffect } from 'react'
-import { Monitor, SlidersHorizontal, Boxes, History as HistoryIcon, Settings, Sparkles } from 'lucide-react'
+import { Monitor, SlidersHorizontal, Boxes, History as HistoryIcon, Terminal, Sparkles } from 'lucide-react'
 import { useStreamWebSocket, useAudioWebSocket } from '../../hooks/useWebSocket'
 import { useDanmakuConnection } from '../danmaku/ConnectionManager'
 import type { Platform, StandardDanmaku, StreamMessage } from '../../types'
@@ -13,10 +13,11 @@ import MainView from './MainView'
 import AudioConfigView from '../settings/AudioConfigView'
 import ModelsView from '../models/ModelsView'
 import HistoryView from '../history/HistoryView'
-import SettingsSheet from '../settings/SettingsSheet'
-import AboutDialog from '../about/AboutDialog'
 
-type ActiveSection = 'workbench' | 'config' | 'models' | 'history'
+import AboutDialog from '../about/AboutDialog'
+import LogView from '../log/LogView'
+
+type ActiveSection = 'workbench' | 'config' | 'models' | 'history' | 'log'
 
 const NAV: { id: ActiveSection; label: string; desc: string; icon: React.ReactNode }[] = [
   {
@@ -43,6 +44,12 @@ const NAV: { id: ActiveSection; label: string; desc: string; icon: React.ReactNo
     desc: '会话回放 · 导出',
     icon: <HistoryIcon className="h-4 w-4" />,
   },
+  {
+    id: 'log',
+    label: '系统日志',
+    desc: '运行时日志 · 链路监控',
+    icon: <Terminal className="h-4 w-4" />,
+  },
 ]
 
 export default function Dashboard() {
@@ -55,7 +62,6 @@ export default function Dashboard() {
   const [tgtLang, setTgtLang] = useState('vi')
   const [engineStatus, setEngineStatus] = useState('checking')
 
-  const [showSettings, setShowSettings] = useState(false)
   const [showAbout, setShowAbout] = useState(false)
 
   // ── 状态解耦：流式 WS + 音频 WS 常驻本层，切换 section 不中断后台监听 ──
@@ -173,9 +179,9 @@ export default function Dashboard() {
   const handleClearMessages = () => { clearMessages() }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+    <div className="flex h-full w-full overflow-hidden bg-background text-foreground">
       {/* ── 侧边栏 ── */}
-      <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-background">
+      <aside className="flex h-full w-56 shrink-0 flex-col border-r border-border bg-background">
         {/* 顶部品牌区 */}
         <div className="flex items-center gap-2.5 border-b border-border/60 px-4 pb-3 pt-4">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand ring-[3px] ring-brand/20">
@@ -204,15 +210,12 @@ export default function Dashboard() {
           ))}
         </nav>
 
-        {/* 吸底常驻：设置 / 关于 */}
+        {/* 吸底常驻：关于 TransFlow */}
         <div className="space-y-1 border-t border-border/60 p-2">
-          <SideButton active={showSettings} onClick={() => setShowSettings(true)}>
-            <Settings className="h-4 w-4" />
-            设置
-          </SideButton>
           <SideButton active={showAbout} onClick={() => setShowAbout(true)}>
             <Sparkles className="h-4 w-4" />
-            关于
+            关于 TransFlow
+            <span className="ml-auto text-[10px] text-muted-foreground">v2.0.0</span>
           </SideButton>
         </div>
       </aside>
@@ -272,12 +275,12 @@ export default function Dashboard() {
           />
         )}
         {section === 'config' && (
-          <div className="flex-1 overflow-auto bg-background">
+          <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-background">
             <AudioConfigView />
           </div>
         )}
         {section === 'models' && (
-          <div className="flex-1 overflow-auto bg-background">
+          <div className="flex min-h-0 flex-1 flex-col overflow-auto bg-background">
             <ModelsView />
           </div>
         )}
@@ -286,10 +289,14 @@ export default function Dashboard() {
             <HistoryView liveItems={callHistory} roomLabel={roomLabel} />
           </div>
         )}
+        {section === 'log' && (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+            <LogView />
+          </div>
+        )}
       </div>
 
-      {/* 弹窗：设置 / 关于 */}
-      <SettingsSheet open={showSettings} onClose={() => setShowSettings(false)} />
+      {/* 弹窗：关于 */}
       <AboutDialog open={showAbout} onClose={() => setShowAbout(false)} />
     </div>
   )

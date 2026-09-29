@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 通话同传模块
+﻿"""
+喜阅 TransFlow — 通话同传模块
 整合音频捕获、处理、翻译、TTS 的完整流程
 """
 from .service import CallTranslationService, get_call_translation_service
@@ -15,3 +15,4 @@ __all__ = [
     "AudioCapture",
     "AudioProcessor",
 ]
+

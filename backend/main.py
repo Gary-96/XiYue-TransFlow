@@ -1,5 +1,5 @@
-"""
-乐曼同传 Leman Translate - 新架构主入口 (v2)
+﻿"""
+喜阅 TransFlow - 新架构主入口 (v2)
 基于 Voicebox 架构模式，依赖注入 + 路由拆分
 """
 import logging
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理 — 仅初始化轻量服务，collector 懒加载"""
-    logger.info("启动乐曼同传 v2 (新架构)...")
+    logger.info("启动喜阅 TransFlow v2 (新架构)...")
 
     # ── 轻量服务（无重型依赖，快速初始化） ──────────────────────
     from app.services.whisper_service import WhisperService
@@ -43,14 +43,14 @@ async def lifespan(app: FastAPI):
     logger.info("FastAPI 已就绪 (轻量初始化)")
     yield
 
-    logger.info("关闭乐曼同传...")
+    logger.info("关闭喜阅 TransFlow...")
     if hasattr(app.state, 'collector_manager') and app.state.collector_manager:
         await app.state.collector_manager.stop_all_platforms()
 
 
 # 创建 FastAPI 应用
 app = FastAPI(
-    title="乐曼同传 Leman Translate API v2",
+    title="喜阅 TransFlow API v2",
     version="0.2.0",
     lifespan=lifespan,
 )
@@ -73,7 +73,7 @@ app.include_router(websocket_router)
 # 根路由
 @app.get("/")
 async def root():
-    return {"message": "乐曼同传 API v2 运行中"}
+    return {"message": "喜阅 TransFlow API v2 运行中"}
 
 @app.get("/health")
 async def health_check():
@@ -106,5 +106,6 @@ if __name__ == "__main__":
         print(f"  taskkill /F /PID <PID>")
         sys.exit(1)
 
-    print(f"[INFO] Starting Leman Translate v0.2.0 on http://{HOST}:{PORT}")
+    print(f"[INFO] Starting TransFlow v0.2.0 on http://{HOST}:{PORT}")
     uvicorn.run(app, host=HOST, port=PORT, reload=False)
+

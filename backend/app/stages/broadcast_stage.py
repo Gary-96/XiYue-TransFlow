@@ -5,10 +5,11 @@ BroadcastStage - 实时广播阶段
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from app.core.event_bus import EventBus
 from app.domain.danmaku.events import DanmakuEventType, UnifiedDanmakuEvent
+from app.infrastructure.websocket.manager import get_websocket_manager
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +19,13 @@ class BroadcastStage:
     实时广播阶段。
 
     订阅 DanmakuEventType.COMMENT / GIFT / MEMBER_JOIN 等事件，
-    通过 callback 发送给前端（WebSocket）。
+    通过 WebSocketManager 发送给前端。
     """
 
-    def __init__(self, bus: EventBus, send_callback: Optional[Callable[[Dict[str, Any]], None]] = None):
+    def __init__(self, bus: EventBus):
         self._bus = bus
-        self._send_callback = send_callback  # 新架构：不直接持有 WS 连接
-        self._subscribed_types: List[str] = [
+        self._ws_manager = get_websocket_manager()
+        self._subscribed_types: list[str] = [
             DanmakuEventType.COMMENT.value,
             DanmakuEventType.GIFT.value,
             DanmakuEventType.MEMBER_JOIN.value,
@@ -54,15 +55,11 @@ class BroadcastStage:
 
     async def _on_event(self, event: UnifiedDanmakuEvent) -> None:
         """处理弹幕事件，转发给前端"""
-        if not self._send_callback:
-            return
-
         message = event.to_dict()
         message["type"] = message["event_type"]  # 前端兼容字段
 
         try:
-            if callable(self._send_callback):
-                self._send_callback(message)
-            logger.debug(f"BroadcastStage: sent {message["event_type"]} to frontend")
+            await self._ws_manager.broadcast(message)
+            logger.debug(f"BroadcastStage: sent {message['event_type']} to frontend")
         except Exception as e:
-            logger.error(f"BroadcastStage: failed to send event: {e}")
+            logger.error(f"BroadcastStage: failed to broadcast event: {e}")

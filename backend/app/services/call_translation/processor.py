@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 音频处理模块
+﻿"""
+喜阅 TransFlow — 音频处理模块
 负责音频缓冲、分块、静音检测
 """
 import asyncio
@@ -73,3 +73,4 @@ class AudioProcessor:
 
 
 __all__ = ["AudioProcessor"]
+

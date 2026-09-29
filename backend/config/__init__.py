@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 配置包导出
+﻿"""
+喜阅 TransFlow — 配置包导出
 """
 from .base import (
     CONFIG_PATH,
@@ -24,3 +24,4 @@ __all__ = [
     "AudioConfig",
     "LocalLLMConfig",
 ]
+

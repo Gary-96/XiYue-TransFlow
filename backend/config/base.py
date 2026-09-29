@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 配置基础层
+﻿"""
+喜阅 TransFlow — 配置基础层
 负责路径解析、默认配置、配置加载与保存
 """
 import json
@@ -125,3 +125,4 @@ def load_config() -> Dict[str, Any]:
         except Exception as e:
             logger.warning(f"Failed to load config.json: {e}, using defaults")
     return json.loads(json.dumps(DEFAULT_CONFIG))
+

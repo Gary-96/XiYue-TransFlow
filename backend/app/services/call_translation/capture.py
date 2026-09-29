@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 音频捕获模块
+﻿"""
+喜阅 TransFlow — 音频捕获模块
 负责从系统音频设备捕获音频流
 """
 import asyncio
@@ -80,3 +80,4 @@ class AudioCapture:
 
 
 __all__ = ["AudioCapture"]
+

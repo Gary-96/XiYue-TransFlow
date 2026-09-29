@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 配置模块测试套件
+﻿"""
+喜阅 TransFlow — 配置模块测试套件
 使用标准库 unittest，无需第三方依赖
 """
 import json
@@ -153,3 +153,4 @@ class TestConfigIntegration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

@@ -1,0 +1,18 @@
+{
+  "synthetic": true,
+  "description": "Synthetic comment message fixture",
+  "method": "WebcastChatMessage",
+  "expected": {
+    "type": "comment",
+    "user": "test_user_001",
+    "text": "你好，这是一条测试弹幕",
+    "language": "zh"
+  },
+  "mock_protobuf_data": {
+    "user": {
+      "nickname": "test_user_001",
+      "userId": "123456789"
+    },
+    "content": "你好，这是一条测试弹幕"
+  }
+}

@@ -1,5 +1,5 @@
-"""
-乐曼同传 Leman Translate — 配置管理器（代理层）
+﻿"""
+喜阅 TransFlow — 配置管理器（代理层）
 代理到 config/ 包，保持向后兼容
 """
 import asyncio
@@ -334,3 +334,4 @@ class ConfigManager:
 def get_config_manager() -> ConfigManager:
     """获取配置管理器单例"""
     return ConfigManager()
+

@@ -1,4 +1,4 @@
-"""乐曼同传 Domain 层"""
+﻿"""喜阅 TransFlow Domain 层"""
 from .danmaku.events import (
     DanmakuEventType,
     CollectorStatus,
@@ -20,3 +20,4 @@ __all__ = [
     "GiftInfo",
     "RoomStats",
 ]
+

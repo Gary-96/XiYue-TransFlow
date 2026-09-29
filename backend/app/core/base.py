@@ -1,5 +1,5 @@
-"""
-乐曼同传 Leman Translate - 核心抽象基类
+﻿"""
+喜阅 TransFlow - 核心抽象基类
 参考 Voicebox 架构，定义服务的标准接口
 """
 from abc import ABC, abstractmethod
@@ -109,3 +109,4 @@ class TTSBackend(ABC):
     def set_voice(self, voice_id: str) -> bool:
         """设置当前音色"""
         pass
+

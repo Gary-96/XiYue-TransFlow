@@ -1,7 +1,7 @@
-@echo off
+﻿@echo off
 chcp 65001 >nul
 echo ========================================
-echo   Leman Translate - Backend Build
+echo   TransFlow - Backend Build
 echo   Output: output\backend_engine
 echo   注意: server/ 云端授权服务已排除在打包之外
 echo ========================================
@@ -118,3 +118,4 @@ echo   Location: output\backend_engine\
 echo   Note: server/ (cloud auth) is NOT included
 echo ========================================
 pause
+

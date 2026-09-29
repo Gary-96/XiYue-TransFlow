@@ -1,5 +1,5 @@
-"""
-乐曼同传 Leman Translate - 依赖注入
+﻿"""
+喜阅 TransFlow - 依赖注入
 替代全局变量，提供服务的统一访问点
 """
 from typing import Generator
@@ -64,3 +64,4 @@ security = HTTPBearer()
 async def get_current_user(credentials = Depends(security)):
     """获取当前用户（预留接口）"""
     return {"token": credentials.credentials}
+

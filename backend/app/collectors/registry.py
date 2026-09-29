@@ -1,5 +1,5 @@
-"""
-乐曼同传 · CollectorRegistry - 平台采集器注册表
+﻿"""
+喜阅 TransFlow · CollectorRegistry - 平台采集器注册表
 职责：管理 Collector 工厂函数映射，支持动态注册
 """
 from __future__ import annotations
@@ -81,3 +81,4 @@ def get_global_registry() -> CollectorRegistry:
 def set_global_registry(registry: CollectorRegistry) -> None:
     global _default_registry
     _default_registry = registry
+

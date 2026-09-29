@@ -1,5 +1,5 @@
-"""
-乐曼同传 Leman Translate - 统一数据模型
+﻿"""
+喜阅 TransFlow - 统一数据模型
 """
 from dataclasses import dataclass, field
 from enum import Enum
@@ -62,3 +62,4 @@ class TranslationRequest:
 
 
 # 移除重复定义，使用 tts_service 中的 TTSRequest
+

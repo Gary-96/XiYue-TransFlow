@@ -1,5 +1,5 @@
-"""
-乐曼同传 Leman Translate — 本地大模型服务
+﻿"""
+喜阅 TransFlow — 本地大模型服务
 支持 Ollama 后端 + CUDA (llama.cpp) 后端
 实现模型下载、推理、健康管理
 """
@@ -375,3 +375,4 @@ def get_local_llm_manager() -> LocalLLMManager:
     if _local_llm_manager is None:
         _local_llm_manager = LocalLLMManager()
     return _local_llm_manager
+

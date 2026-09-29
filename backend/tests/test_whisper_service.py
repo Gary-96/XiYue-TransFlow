@@ -1,5 +1,5 @@
-"""
-乐曼同传 — Whisper 服务测试套件
+﻿"""
+喜阅 TransFlow — Whisper 服务测试套件
 使用标准库 unittest
 """
 import unittest
@@ -44,3 +44,4 @@ class TestModelLoaded(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

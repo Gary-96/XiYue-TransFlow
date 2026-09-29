@@ -1,5 +1,5 @@
-"""
-乐曼同传 · Base Collector - 平台采集器抽象基类
+﻿"""
+喜阅 TransFlow · Base Collector - 平台采集器抽象基类
 职责：只负责采集、解析、标准化为 UnifiedDanmakuEvent
 不直接持有 WebSocket，不直接调用翻译/AI
 """
@@ -109,3 +109,4 @@ class CollectorError(Exception):
         self.platform = platform
         self.error_code = error_code
         self.message = message
+

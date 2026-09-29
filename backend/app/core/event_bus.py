@@ -1,5 +1,5 @@
-"""
-乐曼同传 · EventBus - 异步事件分发总线
+﻿"""
+喜阅 TransFlow · EventBus - 异步事件分发总线
 职责：解耦 Collector 与 Stage/Service，支持多订阅者并行处理。
 
 设计原则：
@@ -114,3 +114,4 @@ def get_global_event_bus() -> EventBus:
 def set_global_event_bus(bus: EventBus) -> None:
     global _default_bus
     _default_bus = bus
+

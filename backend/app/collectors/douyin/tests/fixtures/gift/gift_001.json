@@ -1,0 +1,22 @@
+{
+  "synthetic": true,
+  "description": "Synthetic gift message fixture",
+  "method": "WebcastGiftMessage",
+  "expected": {
+    "type": "gift",
+    "user": "test_user_002",
+    "gift_name": "小心心",
+    "gift_count": 5
+  },
+  "mock_protobuf_data": {
+    "user": {
+      "nickname": "test_user_002",
+      "userId": "987654321"
+    },
+    "gift": {
+      "name": "小心心",
+      "id": "1"
+    },
+    "comboCount": 5
+  }
+}

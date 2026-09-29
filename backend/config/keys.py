@@ -1,5 +1,5 @@
-"""
-乐曼同传 — API Key 管理
+﻿"""
+喜阅 TransFlow — API Key 管理
 负责密钥存储、脱敏显示、环境变量同步
 """
 import logging
@@ -63,3 +63,4 @@ class KeyManager:
         if "****" in key:
             return False
         return True
+

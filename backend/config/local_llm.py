@@ -1,5 +1,5 @@
-"""
-乐曼同传 — 本地大模型配置
+﻿"""
+喜阅 TransFlow — 本地大模型配置
 负责 Ollama/CUDA 后端配置管理
 """
 import logging
@@ -104,3 +104,4 @@ class LocalLLMConfig:
             "local_cuda_model_path": self.get_cuda_model_path(),
             "local_cuda_download_url": self.get_cuda_download_url(),
         }
+

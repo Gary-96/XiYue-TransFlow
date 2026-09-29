@@ -1,5 +1,5 @@
-"""
-乐曼同传 - TTS 语音合成服务
+﻿"""
+喜阅 TransFlow - TTS 语音合成服务
 支持 Edge TTS（免费高品质）、自定义音色、多语言播报
 """
 import asyncio
@@ -380,3 +380,4 @@ class TTSService:
 
 # ── 单例实例 ──────────────────────────────────────────────────
 tts_service = TTSService()
+

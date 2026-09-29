@@ -1,4 +1,4 @@
-"""乐曼同传 Core 层"""
+﻿"""喜阅 TransFlow Core 层"""
 from .base import BaseService, TranslatorBackend, ASRBackend, TTSBackend
 from .event_bus import EventBus, get_global_event_bus, set_global_event_bus
 
@@ -11,3 +11,4 @@ __all__ = [
     "get_global_event_bus",
     "set_global_event_bus",
 ]
+
