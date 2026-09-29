@@ -34,12 +34,12 @@ class LocalLLMConfig:
         path = self._config.get("local_model_dir", "")
         if path:
             return path
-        # 默认：APPDATA/leman-translate/models
+        # 默认：APPDATA/xiyue-transflow/models
         if self._config.get("_platform") == "win32":
             appdata = self._config.get("_appdata", "")
             if appdata:
-                return str(Path(appdata) / "leman-translate" / "models")
-        return str(Path.home() / ".leman-translate" / "models")
+                return str(Path(appdata) / "xiyue-transflow" / "models")
+        return str(Path.home() / ".xiyue-transflow" / "models")
 
     def get_model_name(self) -> str:
         """获取当前模型名称"""

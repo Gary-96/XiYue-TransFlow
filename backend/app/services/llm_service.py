@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 # 默认存储目录
 def _get_default_model_dir() -> Path:
     appdata = os.environ.get("APPDATA", "")
-    return Path(appdata) / "leman-translate" / "models"
+    return Path(appdata) / "xiyue-transflow" / "models"
 
 
 # ── 模型信息 ──────────────────────────────────────────────

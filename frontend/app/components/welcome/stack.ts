@@ -29,7 +29,7 @@ export const STACK: StackEntry[] = [
       { title: 'Typed end to end', description: 'One router type flows from the main process to the renderer' },
       { title: 'Themed already', description: 'Light and dark tokens, applied across the shell and components' },
     ],
-    docs: 'https://github.com/Gary-96/leman-translate',
+    docs: 'https://github.com/Gary-96/XiYue-TransFlow',
   },
   {
     id: 'electron',
@@ -72,7 +72,7 @@ export const STACK: StackEntry[] = [
         description: 'createCaller runs procedures in process, middleware included',
       },
     ],
-    docs: 'https://github.com/Gary-96/leman-translate',
+    docs: 'https://github.com/Gary-96/XiYue-TransFlow',
   },
   {
     id: 'react',

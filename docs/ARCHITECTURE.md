@@ -2,7 +2,7 @@
 
 > 生成时间：2026-09-29  
 > 项目路径：`D:\软件开发\中越直播小助手`  
-> Git 远端：`https://github.com/Gary-96/leman-translate`
+> Git 远端：`https://github.com/Gary-96/XiYue-TransFlow`
 
 ---
 

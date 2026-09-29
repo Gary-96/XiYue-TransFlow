@@ -6,7 +6,7 @@
   "license": "MIT",
   "author": {
     "name": "Gary-96",
-    "url": "https://github.com/Gary-96/leman-translate"
+    "url": "https://github.com/Gary-96/XiYue-TransFlow"
   },
   "scripts": {
     "dev": "cross-env ELECTRON_DISABLE_SANDBOX=1 electron-vite dev -w",
@@ -29,7 +29,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Gary-96/leman-translate.git"
+    "url": "https://github.com/Gary-96/XiYue-TransFlow.git"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

@@ -19,17 +19,17 @@ def _get_config_dir() -> Path:
     if sys.platform == "win32":
         appdata = os.environ.get("APPDATA")
         if appdata:
-            p = Path(appdata) / "leman-translate"
+            p = Path(appdata) / "xiyue-transflow"
             p.mkdir(parents=True, exist_ok=True)
             return p
     elif sys.platform == "darwin":
         home = Path.home()
-        p = home / "Library" / "Application Support" / "leman-translate"
+        p = home / "Library" / "Application Support" / "xiyue-transflow"
         p.mkdir(parents=True, exist_ok=True)
         return p
     else:
         home = Path.home()
-        p = home / ".config" / "leman-translate"
+        p = home / ".config" / "xiyue-transflow"
         p.mkdir(parents=True, exist_ok=True)
         return p
 

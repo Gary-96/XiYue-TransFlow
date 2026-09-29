@@ -4,7 +4,7 @@ import { DEMO_ID } from './demo-panel'
 import { DrawnArrow } from './drawn-arrow'
 import { STACK } from './stack'
 
-const REPO = 'https://github.com/Gary-96/leman-translate'
+const REPO = 'https://github.com/Gary-96/XiYue-TransFlow'
 
 /** Stack navigation: one row per entry, with the live IPC badge and repo link pinned to the bottom. */
 export function Sidebar({ active, onSelect }: { active: string; onSelect: (id: string) => void }) {
